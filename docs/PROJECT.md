@@ -1,7 +1,7 @@
 # MINERvA sim→reco surrogate: project design
 
-Status: design draft, 2026-09-23. No code yet by intent; the goal of this document is to make the idea
-solid enough to start coding. Open questions are collected in §10 and are meant to become GitHub issues.
+Status: design agreed 2026-09-23, scaffold next. §10 records the decisions taken on the original open questions;
+§13 fixes the data schema; §14 lists what still has to be defined before coding.
 
 ## 1. Goal
 
@@ -264,30 +264,20 @@ directly useful for validation. Start with flow matching for both tiers to keep 
 - Local machine: 20 cores, 30 GB RAM, one RTX 3090 (24 GB). Enough for everything above. `torch` is not yet
   installed; only `uproot`/`awkward`/`numpy` are, as user packages on Python 3.9.
 
-## 10. Open questions (to become GitHub issues)
+## 10. Decisions on the original open questions (2026-09-23)
 
-1. **pi0 handling on the input side:** keep pi0 as one token, or decay to two photons so the encoder sees what
-   Geant4 sees? Decaying is more "detector-causal" but adds sampling noise to the inputs.
-2. **Neutrons and very-low-KE particles:** keep all, or apply a low-KE cut (e.g. drop protons < 20 MeV that
-   cannot make a hit)? A cut is a modelling assumption; keeping everything is cleaner but adds noise tokens.
-3. **Canonical prong table:** how exactly to merge `proton_*`, `sec_protons_*`, `pion_*[10]`, `hadron_*[10]`
-   into one unordered set of prongs with consistent fields. Needs a careful look at how MasterAnaDev fills them.
-4. **Which recoil definition(s) to target:** `recoil_E`, `hadron_recoil_CCInc`, or the radius-scan
-   `recoil_energy_nonmuon_*` family. Different analyses want different ones; modelling several jointly is fine.
-5. **Overlay / detector-condition conditioning:** confirm which branches are populated from the data overlay
-   in ME MC and available identically in data (`numi_pot`, `phys_n_dead_discr_pair`, run period).
-6. **Vertex as separately controllable context vs. plain input** (§4): agree on the recommendation and on the
-   derived geometric features.
-7. **Cross-playlist scope:** ME FHC only for the first pass, or FHC+RHC from the start? Antineutrino mode is
-   also the cleanest extrapolation test.
-8. **Systematics-aware training:** the tuple carries hundreds of universe weights and particle-response shifts.
-   Ignore for now, or use `part_response_*` shifts as data augmentation so the surrogate can also emit
-   detector-systematic variations?
-9. **Definition of "the reco event exists":** the `MasterAnaDev` tree requires a muon candidate. Should Tier 0
-   model the MasterAnaDev preselection, or a specific analysis' full cut chain?
-10. **Target of extrapolation for the first physics study:** which alternative generator output do we want to
-    push through first (GENIE 3 hA vs hN FSI? NuWro?), and in what format do we get its final-state particles
-    (NUISANCE flat trees are the obvious route).
+| # | Question | Decision |
+|---|---|---|
+| 1 | pi0 on the input side | **Decay to two photons** in the input pipeline (isotropic in the pi0 rest frame, seeded), because reco often sees only one photon. |
+| 2 | Neutrons and low-KE particles | **Drop neutrons entirely** from the inputs for v1 and **apply a 50 MeV KE cut** to the remaining hadrons. Consequence: the neutron contribution to recoil energy and to fake prongs becomes unexplained noise the model has to absorb; revisit if the recoil response looks too broad. |
+| 3 | Canonical prong table | The model uses its own internal representation (n, prong[0..n-1]) but **the delivered output is a ROOT ntuple with the same branch names, types and fill conventions as the open-data tuple, pruned to the modelled branches**, so downstream code needs no changes. Schema in §13. |
+| 4 | Which recoil definitions | Model the ones that are filled and used; the set is listed in §13. |
+| 5 | Overlay conditions as context | Keep; start with `phys_n_dead_discr_pair` and `numi_pot`, verify against data. |
+| 6 | Vertex as controllable context | Adopt the recommendation of §4 (global context + per-particle derived geometry). |
+| 7 | Playlist scope | **ME FHC only** for now. |
+| 8 | Systematics-aware training | Ignore for now. |
+| 9 | Definition of "reconstructed" | Tier 0 models exactly the tuple's own requirement: **a reconstructed muon candidate** (presence in the `MasterAnaDev` tree). No further cuts are baked in; analysis cuts are applied to surrogate output afterwards. |
+| 10 | First alternative-generator target | None specified. Any generator that provides final-state particles with kinematics must be a valid input; the input interface is defined generically (§13.1). |
 
 ## 11. Milestones
 
@@ -310,3 +300,93 @@ directly useful for validation. Start with flow matching for both tiers to keep 
   arXiv:2303.05376), EPiC-FM (Birk et al., arXiv:2310.00049), CaloClouds (Buhmann et al., arXiv:2305.04847).
 - Conditional normalizing flows for detector simulation: CaloFlow (Krause & Shih, arXiv:2106.05285).
 - Flow matching: Lipman et al., "Flow Matching for Generative Modeling", arXiv:2210.02747.
+
+## 13. Data schema
+
+### 13.1 Input interface (generator-agnostic)
+
+One event = a list of final-state particles `(pdg, px, py, pz, E)` in MeV, detector coordinates, plus a context
+record. Nothing generator-specific is allowed in. The pipeline then applies, in order:
+
+1. Drop neutrinos, GENIE pseudo-particles (2000000101), nuclear remnants (PDG > 1e9), and **neutrons**.
+2. Decay every pi0 to two photons (isotropic, seeded RNG); record the seed.
+3. Drop hadrons (p, pi±, K, hyperons) with KE < 50 MeV. Leptons and photons are not cut.
+4. Map PDG to a species class: mu-, mu+, e±, gamma, p, pi+, pi-, K±, K0(L/S), hyperon, other.
+5. Per-particle features: class embedding, log KE, cos θ_beam, φ, plus derived geometry from the vertex (§4).
+
+Context record: `vtx_x, vtx_y, vtx_z` (mm), `target_Z`, `target_A`, `targetID`, `beamConfig`,
+`n_dead_discr_pair`, `spill_pot`. For MC training these come from `mc_vtx`, `mc_targetZ/A`, `truth_targetID`,
+`mc_beamConfig`, `phys_n_dead_discr_pair`, `numi_pot`. For a new generator, the vertex and target must be
+supplied by the user (or sampled from the MC vertex distribution for the target of interest); detector
+conditions are sampled from the MC/data distribution of the run period.
+
+### 13.2 How MasterAnaDev fills the hadron prongs (measured)
+
+- `n_prongs − 1 == MasterAnaDev_hadron_number` in 100% of events; `multiplicity − 1` agrees in 95%.
+- `MasterAnaDev_pion_*[10]` and `MasterAnaDev_hadron_*[10]` are **one generic per-prong table**, index
+  `i = 0 .. hadron_number−1`, fill −1 beyond. The pion hypothesis (`pion_P/E/theta/phi`, endpoints) is applied
+  to every prong including true protons (filled for 84% of proton-matched and 81% of pion-matched prongs; the
+  rest failed the fit). `hadron_tm_PDGCode[i]`, `hadron_tm_fraction[i]` give the truth match per prong.
+- `MasterAnaDev_proton_*` (scalars, −9999 if none; filled in 40% of events) describe the **best proton
+  candidate**, which is one of the prongs above (same θ, different momentum because the proton hypothesis
+  is used). `MasterAnaDev_pion_score/_score1` scalars belong to this same prong.
+- `MasterAnaDev_sec_protons_*` (jagged with `_sz` counters; ≥1 in 7% of events, max 5) are the remaining
+  prongs that passed a proton fit. `(has primary proton) + n_sec_protons ≤ hadron_number` always.
+- Prongs are unordered from the model's point of view; the tuple order is reconstruction order.
+
+Internal representation: `n_prongs`, then for prong `i`: pion-hypothesis `(P, θ, φ, endpoint z)`, proton-hypothesis
+`(P, score1)` with a "has proton fit" flag, `isExiting`, `isTracker`, `endMichel_category`, `piFit_scoreLLR`.
+Decoder rule back to the tuple: the prong with the highest proton `score1` becomes `proton_*`; other prongs
+with a proton fit become `sec_protons_*` in prong order; all prongs fill `pion_*[i]` and `hadron_*[i]`.
+
+### 13.3 Output ntuple (pruned MasterAnaDev tree)
+
+Written with uproot; typenames verified to round-trip (`double`, `double[4]`, `double[10]`, `double[]` +
+`int32 _sz`). Fill conventions copied from the tuple: −9999 for missing scalars of the proton block, −1 for
+empty prong slots, `_sz = 0` for empty jagged branches.
+
+| Block | Branches | Fill |
+|---|---|---|
+| Truth passthrough | `mc_run, mc_subrun, mc_nthEvtInFile, eventID, mc_vtx, mc_targetZ, mc_targetA, truth_targetID, mc_nFSPart, mc_FSPartPDG/Px/Py/Pz/E, mc_primFSLepton, mc_incoming, mc_current, mc_intType` | copied from input when available (MC); user-supplied otherwise |
+| Tier 0 | presence of the event in the tree; `MasterAnaDev_minos_trk_is_ok`, `MasterAnaDev_minos_used_range`, `MasterAnaDev_minos_used_curvature`, `MasterAnaDev_nuHelicity` | modelled |
+| Muon | `MasterAnaDev_muon_P, _E, _Px, _Py, _Pz, _theta, _phi, _qp`, `MasterAnaDev_minos_trk_p` | modelled as response (log P_reco/P_true, Δθ), decoded to absolutes |
+| Vertex | `MasterAnaDev_vtx[4]`, `vtx[4]`, `MasterAnaDev_vtx_module` | modelled as Δ from truth |
+| Multiplicity | `n_prongs`, `multiplicity`, `MasterAnaDev_hadron_number`, `n_nonvtx_iso_blobs` | modelled (cardinality heads) |
+| Calorimetry | `MasterAnaDev_recoil_E`, `MasterAnaDev_recoil_passivecorrected`, `MasterAnaDev_hadron_recoil`, `MasterAnaDev_hadron_recoil_CCInc`, `MasterAnaDev_hadron_recoil_default`, `MasterAnaDev_hadron_recoil_two_track`, `recoil_energy_nonmuon_nonvtx100mm`, `recoil_energy_nonmuon_vtx100mm`, `nonvtx_iso_blobs_energy`, `vtx_blobs_energy`, `blob_recoil_E` | modelled jointly; `recoil_E_wide_window` is identical to `recoil_E` in this sample and is copied |
+| Prongs (Tier 2) | `MasterAnaDev_pion_P/E/T/theta/phi/Px/Py/Pz/endPointZ[10]`, `MasterAnaDev_hadron_isExiting/isTracker/endMichel_category/piFit_scoreLLR[10]`, `MasterAnaDev_proton_P/E/T/Px/Py/Pz_fromdEdx, _theta, _phi, _score1`, `MasterAnaDev_pion_score1`, `MasterAnaDev_sec_protons_P/E/T/Px/Py/Pz_fromdEdx, _theta_fromdEdx, _proton_scores1, _pion_scores1` (+ `_sz`) | modelled, decoded per §13.2 |
+| Derived | `MasterAnaDev_E`, `MasterAnaDev_Q2`, `MasterAnaDev_W`, `MasterAnaDev_leptonE[4]` | computed from the above with the tuple's formulas, not modelled |
+
+Branches that are constant or unfilled in this sample (`blob_ccqe_recoil_E`, `EMLikeTrackMultiplicity`,
+`improved_*` michel arrays, pi0/gamma blocks) are left out of v1.
+
+## 14. Still to define before the scaffold
+
+Ordered by how much they constrain code. Items marked (R) have a recommendation to be confirmed.
+
+1. **Angle convention.** MINERvA's beam points 3.34° below the detector z axis. Decide whether truth θ and the
+   modelled Δθ are w.r.t. the beam or the detector z axis, and check which convention `MasterAnaDev_muon_theta`
+   and `mc_primFSLepton` use. (R): beam axis everywhere, compute truth angles after rotating by 3.34°.
+2. **Training population and denominator.** (R): every `Truth`-tree event, no fiducial cut, since the vertex is
+   in the context and efficiency vs. position is part of what we model. Restrict to the z range where the reco
+   tree has events. NC and nu_e events stay in: 10% of reco events are NC with a fake muon.
+3. **Muon-less inputs.** After the neutron/KE cuts an NC event may have no lepton token. Tier 0 must still
+   produce a probability of a fake muon. No special handling needed, but the loss weighting should not let the
+   93% "not reconstructed" NC majority swamp the rare fakes.
+4. **Splits.** (R): split by `mc_subrun` (not by event) into train/val/test 80/10/10 to avoid overlay
+   correlations leaking; the physics holdouts of §7 are defined on top as separate experiments.
+5. **Normalisations and transforms per target.** log for momenta and energies, logit with dequantisation for
+   scores in [0,1], wrapped φ (model `(cos φ, sin φ)`), integer cardinalities as categorical with N_max = 8.
+6. **Response targets that need a truth reference the model does not have at inference.** Muon: use the
+   input muon token; if there is none (NC), model the absolute muon P instead. Prongs: absolute kinematics,
+   since prong-to-truth assignment is not known at inference.
+7. **Closure and extrapolation metrics** with concrete definitions: per-variable Wasserstein-1 on standardized
+   targets, multiplicity confusion matrix, efficiency vs. (Σ KE, n_vis, vtx z), and a real-vs-surrogate
+   classifier AUC on (truth, reco) pairs. Fix the binning once and keep it.
+8. **Software stack.** (R): Python 3.9 venv, `torch 2.8` (CUDA wheel; driver 615 supports it), `uproot 5`,
+   `awkward 2`, `polars`/`pyarrow` for Parquet, `hydra`/YAML configs, `pytest`. Experiment tracking: plain
+   CSV + tensorboard first; no external service.
+9. **Repo layout.** (R): `sim2reco/` package with `io/` (slimming, ROOT writer), `prep/` (input pipeline of
+   §13.1, prong table of §13.2), `models/` (encoder, heads, flow matching), `train/`, `eval/`; `configs/`;
+   `scripts/`; `tests/`; `notebooks/` for EDA only.
+10. **Dataset size for M0.** Which and how many ME FHC MC files to slim first, and where they live (they stay
+    out of git). (R): the one file we have for the scaffold; 5 or more files before M2.
