@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sim2reco"
+version = "0.0.1"
+description = "MINERvA open-data sim-to-reco surrogate"
+requires-python = ">=3.9"
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+packages = ["sim2reco", "sim2reco.io", "sim2reco.prep", "sim2reco.data", "sim2reco.models", "sim2reco.train", "sim2reco.eval"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

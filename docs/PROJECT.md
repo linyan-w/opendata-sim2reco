@@ -1,7 +1,7 @@
 # MINERvA sim→reco surrogate: project design
 
-Status: design agreed 2026-09-23, scaffold next. §10 records the decisions taken on the original open questions;
-§13 fixes the data schema; §14 lists what still has to be defined before coding.
+Status: design agreed and M0 scaffold in place (2026-09-23). §10 records the decisions taken on the original open
+questions; §13 fixes the data schema; §14 records the remaining definitions.
 
 ## 1. Goal
 
@@ -397,7 +397,7 @@ empty prong slots, `_sz = 0` for empty jagged branches.
 |---|---|---|
 | Truth passthrough | `mc_run, mc_subrun, mc_nthEvtInFile, eventID, mc_vtx, mc_targetZ, mc_targetA, truth_targetID, mc_nFSPart, mc_FSPartPDG/Px/Py/Pz/E, mc_primFSLepton, mc_incoming, mc_current, mc_intType` | copied from input when available (MC); user-supplied otherwise |
 | Tier 0 | presence of the event in the tree; `MasterAnaDev_minos_trk_is_ok`, `MasterAnaDev_minos_used_range`, `MasterAnaDev_minos_used_curvature`, `MasterAnaDev_nuHelicity` | modelled |
-| Muon | `MasterAnaDev_muon_P, _E, _Px, _Py, _Pz, _theta, _phi, _qp`, `MasterAnaDev_minos_trk_p` | from `mu_px, mu_py, mu_pz` and the Tier 0 flags |
+| Muon | `MasterAnaDev_muon_P, _E, _Px, _Py, _Pz, _theta`, `muon_phi`, `MasterAnaDev_minos_trk_is_ok`, `MasterAnaDev_nuHelicity` | from `mu_px, mu_py, mu_pz` and the Tier 0 flags. `muon_qp` and `minos_trk_p` are MINOS-track quantities not derivable from these and are not written. |
 | Vertex | `MasterAnaDev_vtx[4]`, `vtx[4]`, `MasterAnaDev_vtx_module` | from `rvtx_*`; module from z with the geometry table |
 | Multiplicity | `n_prongs`, `multiplicity`, `MasterAnaDev_hadron_number`, `n_nonvtx_iso_blobs` | `n_prongs + 1`, `hadron_number = n_prongs`; blobs from the model |
 | Calorimetry | `MasterAnaDev_recoil_E`, `_recoil_E_wide_window`, `_hadron_recoil_CCInc` (all identical to `recoil_E` in this sample), `MasterAnaDev_recoil_passivecorrected`, `_hadron_recoil_default` (identical), `MasterAnaDev_hadron_recoil`, `recoil_energy_nonmuon_nonvtx100mm`, `nonvtx_iso_blobs_energy` | from the 5 modelled calorimetric variables; aliases copied |
@@ -410,8 +410,8 @@ Branches that are constant or unfilled in this sample (`blob_ccqe_recoil_E`, `EM
 ## 14. Remaining definitions (resolved 2026-09-23 unless marked open)
 
 1. **Angles.** Not a separate definition: the interface carries `(px, py, pz)` and vertex `(x, y, z)`; angles
-   are derived by whoever needs them, in whichever convention. Beam-axis vs. detector-axis only matters when
-   filling `MasterAnaDev_muon_theta` at decode time, where we copy the tuple's convention (to be checked once).
+   are derived by whoever needs them. All tuple angle branches are in the beam frame (rotation about x by
+   `-0.05887` rad); the decoder reproduces them exactly (`sim2reco/prep/frames.py`, `docs/tuple_notes.md`).
 2. **Training population.** Every `Truth`-tree event that is CC nu_mu, no fiducial cut, restricted to the z range
    where the reco tree has events. NC, nu_e, antineutrino events excluded (decision 9).
 3. **Splits.** By `mc_subrun`, 80/10/10 train/val/test; physics holdouts of §7 on top as separate experiments.
@@ -425,5 +425,7 @@ Branches that are constant or unfilled in this sample (`blob_ccqe_recoil_E`, `EM
 7. **Repo layout.** `sim2reco/` package with `io/`, `prep/`, `models/`, `train/`, `eval/`; `configs/`;
    `scripts/`; `tests/`; `notebooks/` for EDA only.
 8. **First dataset.** The single ME FHC file for the scaffold; 5 or more files before M2.
-9. **Open:** exact z range and target-Z set for the training population (check against the reco tree).
+9. Training population z range: `z >= 4000 mm` (reco-tree CC nu_mu events start at 1811 mm but 99.9% are
+   above 3971 mm; the nuclear-target region begins near 4300 mm). All target-Z values are kept. Gives
+   368k events from the example file with 39.6% reconstructed (`docs/tuple_notes.md`).
 10. `n_nonvtx_iso_blobs` and `nonvtx_iso_blobs_energy` wait for M4 (decided 2026-09-23).

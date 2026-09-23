@@ -1,0 +1,14 @@
+# Data and selection configuration (docs/PROJECT.md 13.1, 14.2)
+slim_dir: data/slim
+files:
+  - MasterAnaDev_mc_AnaTuple_run00113069_Playlist
+selection:
+  ke_cut_mev: 50.0
+  z_min: 4000.0
+  z_max: 8700.0
+  cc_numu_only: true
+particles:
+  n_max: 64
+split:
+  fractions: [0.8, 0.1, 0.1]
+  seed: 0

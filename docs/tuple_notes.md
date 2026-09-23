@@ -76,3 +76,31 @@ about 17% of events have an extra reco track, from neutrons, photons, overlay, o
 - Upstream branch documentation: https://github.com/MinervaExpt/Tuple-Documentation
   (`MAD_tuple_MainDoc.csv`, 257 documented branches, mostly pi0/neutron/systematics groups; a copy is in
   `docs/branches/`). Full branch lists from this file are in `docs/branches/*_branches.txt`.
+
+## Conventions discovered while writing the encoder/decoder (2026-09-23)
+
+All verified by exact round trip on 20k reco events (`tests/`).
+
+- **Beam frame.** Every `*_theta` / `*_phi` branch (`MasterAnaDev_muon_theta`, `muon_phi`, `pion_theta/phi[10]`,
+  `proton_theta/phi`, `sec_protons_theta_fromdEdx`) is measured in the beam frame: detector frame rotated about
+  x by MINERvA's `numi_beam_angle_rad = -0.05887` (3.373°). All `Px/Py/Pz` branches are in the detector frame.
+  With that constant the muon angles round-trip to 1e-16; with the often-quoted 3.34° they are off by up to
+  6e-4 rad. `sim2reco/prep/frames.py` does the conversion.
+- **Prong table.** `pion_*[10]` and `hadron_*[10]` are indexed by prong `i < MasterAnaDev_hadron_number`
+  (`= n_prongs - 1`). Empty slots: `pion_P/E/Px/Py/Pz = -1`, `pion_T = -9999`, `pion_theta/phi = -9`,
+  `hadron_isExiting = -1`. A valid prong whose pion fit failed has `P = E = -1`, `T = -9999`, but valid angles.
+- **"Direction only" sentinel.** ~0.3% of prongs (and 12 primary protons, 6 secondary-proton entries in 20k
+  events) have `P == 1`, `E == 0`, `T == -mass`, and unit-vector `Px/Py/Pz`. We treat them as "no fit".
+- **Primary / secondary protons.** `MasterAnaDev_proton_*` and each `sec_protons_*` entry match exactly one
+  prong by `theta` (identical to 1e-6, 100% of cases); secondaries never coincide with the primary. Picking
+  the primary as the highest `proton_score1` reproduces MasterAnaDev's choice in 90.5% of events; for the
+  other 9.5% MasterAnaDev used some other criterion, so the encoder keeps an explicit `is_primary_proton` flag.
+- **Muon.** `muon_P == |(Px, Py, Pz)|` exactly. `muon_E` is on-shell only for MINOS-matched muons; for 82% of
+  unmatched muons `muon_E == muon_P`. `muon_qp` is the MINOS-track q/p in 1/GeV (`-9999.9` when unmatched), so
+  it is not derivable from the MINERvA momentum; only its sign (= `nuHelicity`) is modelled.
+- **Slimming.** Both trees of the 19.8 GB file slim to 105 MB (reco, 168k events) + 194 MB (truth, 519k
+  events) of Parquet in 6 s, because uproot reads only the requested baskets.
+- **Training population** (CC nu_mu, true vertex z ≥ 4000 mm): 368,396 Truth events, of which 39.6% have a
+  reco entry. After the input cuts (no neutrons, KE ≥ 50 MeV) events have 4.1 particles on average, 99% ≤ 11,
+  max 31. Among reconstructed events 78.5% are MINOS-matched and 97.3% have negative reco charge. 462 subruns
+  in the file, so a subrun-level 80/10/10 split gives 293k / 37k / 38k events.
