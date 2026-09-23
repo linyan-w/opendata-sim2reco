@@ -1,4 +1,4 @@
-# minerva-sim2reco
+# opendata-sim2reco
 
 An AI/ML surrogate for the MINERvA detector: per-event mapping from GENIE final-state truth to MasterAnaDev
 reconstructed variables, trained on the [MINERvA open data](https://minerva.fnal.gov/opendata/) MC, built to
