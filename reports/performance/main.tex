@@ -5,7 +5,7 @@
 \usepackage{graphicx}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
-\graphicspath{{../m1/figures/}{figures/}{../../docs/figures/}}
+\graphicspath{{../m1/figures/}{../m2/figures/}{figures/}{../../docs/figures/}}
 
 \title{MINERvA open-data sim$\to$reco surrogate:\\ performance report}
 \author{L.~Wan\thanks{lwan@fnal.gov}}
@@ -142,9 +142,72 @@ after cuts (right).}
 \label{fig:recoil}
 \end{figure}
 
+\section{M2: set encoder with flow-matching Tier 1}
+\label{sec:m2}
+
+The first surrogate proper (Fig.~\ref{fig:schematic}): a transformer set encoder over the particle tokens
+(class embedding plus scaled momentum features) with a global context token; Tier 0 and cardinality heads on
+the event embedding; and a conditional flow-matching model (linear path, Gaussian source, midpoint sampler
+with 64 steps) for the 11 Tier 1 variables, conditioned on the embedding, the Tier 0 flags and the prong
+multiplicity. Internally the muon is generated as $\log(P_\mathrm{reco}/P_\mathrm{true})$ and two slope
+differences, the vertex as a residual, energies as $\log(E+1)$ with exact zeros dequantised into a negative
+band; all robustly standardised and clipped at $\pm 12\sigma$. The model has 1.5\,M parameters and is trained
+jointly on all four losses.
+
+\paragraph{Data.} \input{../m2/tables/data.tex}
+
+\begin{table}[h]\centering
+\input{../m2/tables/tier0.tex}
+\caption{Tier 0 test log loss and AUC: marginal predictor, M1 trees on summary features, M2 surrogate on the
+particle set.}
+\label{tab:m2-tier0}
+\end{table}
+
+\begin{table}[h]\centering
+\input{../m2/tables/multiplicity.tex}
+\caption{Prong multiplicity head versus the M1 tree.}
+\label{tab:m2-mult}
+\end{table}
+
+\begin{table}[h]\centering\small
+\resizebox{\textwidth}{!}{\input{../m2/tables/tier1_marginals.tex}}
+\caption{Tier 1 marginals on reconstructed test events, in the model's robustly standardised space, one
+surrogate sample per event with Tier 0 flags and multiplicity also sampled.}
+\label{tab:m2-tier1}
+\end{table}
+
+\begin{table}[h]\centering
+\input{../m2/tables/closure.tex}
+\caption{Closure test: a gradient-boosted classifier trained to separate MasterAnaDev from surrogate output on
+half of the test split, AUC on the other half. 0.5 is perfect closure; the M2 exit criterion is $< 0.55$.}
+\label{tab:m2-closure}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{m2_muon.png}
+\caption{M2 muon response (model space): matched, unmatched, and $x$-slope difference.}
+\end{figure}
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{m2_calorimetry.png}
+\caption{M2 calorimetric variables; the spike at zero is the exactly-zero population reproduced by dequantisation.}
+\end{figure}
+\begin{figure}[h]\centering
+\includegraphics[width=0.75\textwidth]{m2_conditionals.png}
+\caption{M2 conditionals: muon response versus true momentum and recoil versus true hadronic KE (median, 16--84\%).}
+\end{figure}
+\begin{figure}[h]\centering
+\includegraphics[width=0.75\textwidth]{m2_correlations.png}
+\caption{Correlation matrices of the 11 Tier 1 variables, MasterAnaDev versus surrogate.}
+\end{figure}
+\begin{figure}[h]\centering
+\includegraphics[width=0.75\textwidth]{m2_multiplicity_eff.png}
+\caption{M2 sampled prong multiplicity and efficiency calibration versus true hadron count.}
+\end{figure}
+
 \section{Discussion}
 \label{sec:discussion}
 \input{discussion_m1.tex}
+\input{discussion_m2.tex}
 
 \begin{thebibliography}{9}
 \bibitem{opendata} MINERvA Collaboration, Open Data Release, \url{https://minerva.fnal.gov/opendata/},

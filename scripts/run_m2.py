@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+"""Train and evaluate the M2 surrogate.
+Usage: scripts/run_m2.py OUT_DIR --stems data/slim/A data/slim/B ... [--epochs 20] [--bs 1024] [--max-train N] [--eval-only]"""
+import sys, pathlib, argparse, json, glob
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+import numpy as np, torch
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("out_dir"); ap.add_argument("--stems", nargs="*", default=None); ap.add_argument("--slim-dir", default="data/slim")
+    ap.add_argument("--epochs", type=int, default=20); ap.add_argument("--bs", type=int, default=1024); ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--max-train", type=int, default=None); ap.add_argument("--eval-only", action="store_true"); ap.add_argument("--m1", default="reports/m1/metrics.json")
+    ap.add_argument("--d-model", type=int, default=128); ap.add_argument("--n-layers", type=int, default=4); ap.add_argument("--n-files", type=int, default=None)
+    a = ap.parse_args()
+    from sim2reco.train.m2 import train, evaluate, load_model, make_loaders
+    from sim2reco.data.compact import load_compact, Tier1Transform
+    from sim2reco.data.dataset import split_by_subrun
+    stems = a.stems or sorted(p[:-len(".truth.parquet")] for p in glob.glob(f"{a.slim_dir}/*.truth.parquet"))
+    if a.n_files: stems = stems[:a.n_files]
+    print(f"{len(stems)} files")
+    if a.eval_only:
+        d = load_compact(stems); split = split_by_subrun(d["subrun"], seed=0)
+        model, tf = load_model(pathlib.Path(a.out_dir) / "model.pt")
+        idx, ds, ld = make_loaders(d, split, tf, a.bs, 0)
+    else:
+        d, split, tf, idx, ld, out = train(stems, a.out_dir, a.epochs, a.bs, a.lr, 0, "cuda", a.d_model, a.n_layers, max_train_events=a.max_train)
+        model, tf = load_model(pathlib.Path(a.out_dir) / "model.pt")
+    m1 = json.load(open(a.m1)) if pathlib.Path(a.m1).exists() else None
+    M = evaluate(model, tf, d, idx["test"], ld["test"], a.out_dir, m1_metrics=m1)
+    print(json.dumps({"tier0": {k: round(v["logloss"], 4) for k, v in M["tier0"].items()}, "mult_logloss": round(M["multiplicity"]["logloss"], 4),
+                      "auc_marginal": round(M["classifier_auc_marginal"], 4), "auc_conditional": round(M["classifier_auc_conditional"], 4),
+                      "w1": {k: round(v["w1"], 4) for k, v in M["tier1_model_space"].items()}}, indent=1))

@@ -35,20 +35,20 @@
   context $c=(x,y,z,Z,A)$};
 
 % ---------- column 2: network ----------
-\node[status, draw=plan, right=26mm of pipe.east, anchor=west] (enc)
-  {\textbf{Set encoder} (planned, M2)\\
+\node[status, draw=wip, right=26mm of pipe.east, anchor=west] (enc)
+  {\textbf{Set encoder} (M2, training)\\
   class embedding $\oplus$ scaled $p$ per token\\
   $+$ global token from $c$\\
   transformer, no positional encoding\\
   $\Rightarrow$ event embedding $z$, token states $h_i$};
 
-\node[status, draw=plan, below=9mm of enc.south west, anchor=north west, xshift=-4mm] (t0)
+\node[status, draw=wip, below=9mm of enc.south west, anchor=north west, xshift=-4mm] (t0)
   {\textbf{Tier 0 heads}\\
   $p(\mathrm{reco\,exists}\mid z)$\\
   $p(\mathrm{MINOS\,ok}\mid z)$\\
   $p(\mathrm{charge}<0\mid z)$};
-\node[status, draw=plan, below=6mm of t0.south west, anchor=north west] (t1)
-  {\textbf{Tier 1 generative} (M2)\\
+\node[status, draw=wip, below=6mm of t0.south west, anchor=north west] (t1)
+  {\textbf{Tier 1 generative} (M2, training)\\
   conditional flow matching on 11-d\\
   $\mu\,(p_x,p_y,p_z)$, reco vertex $(x,y,z)$,\\
   5 calorimetric energies\\
@@ -59,7 +59,7 @@
   per prong: $\pi$-hyp.\ $p$, proton fit flag,\\
   proton $P$, score, exiting flag\\
   equivariant net, cross-attends $h_i$};
-\node[status, draw=plan, above=6mm of t2.north, anchor=south] (card)
+\node[status, draw=wip, above=6mm of t2.north, anchor=south] (card)
   {\textbf{Cardinality}\\
   $p(N_\mathrm{prongs}\mid z)$\\
   categorical $0..8$};
