@@ -107,7 +107,7 @@ Proposed contents of `c`:
 | True vertex (x, y, z) | `mc_vtx[0:3]` | Detector coordinates in mm. Time is irrelevant. |
 | Target material | `mc_targetZ`, `mc_targetA`; `truth_targetID`, `truth_vtx_module` | Largely a function of z, but not fully (tracker is a C/H mix, water target, passive layers). Keep both raw position and material class. |
 | Beam / playlist | `mc_beamConfig`; neutrino vs antineutrino mode | Constant within a playlist; needed when training across playlists (ME FHC vs RHC). |
-| Detector conditions | `phys_n_dead_discr_pair` (dead channels), `numi_pot` (spill intensity → overlay pileup), possibly `ev_gps_time_sec` binned into run periods | In ME MC these come from the **data overlay**, so they have realistic distributions and are available identically in data. At inference they are sampled from the empirical distribution of the run period one wants to emulate. |
+| Detector conditions | `phys_n_dead_discr_pair` (dead channels), `numi_pot` (spill intensity → overlay pileup) | Considered and **dropped for v1** after measuring negligible correlation with the reco targets (§13.2); the model marginalizes over the ME FHC run-condition mixture. |
 
 One caveat: the more we put into `c`, the more the surrogate is tied to MINERvA-ME-specific conditions. Keep `c`
 small and physically interpretable.
@@ -275,7 +275,7 @@ directly useful for validation. Start with flow matching for both tiers to keep 
 | 2 | Neutrons and low-KE particles | **Drop neutrons entirely** from the inputs for v1 and **apply a 50 MeV KE cut** to the remaining hadrons. Consequence: the neutron contribution to recoil energy and to fake prongs becomes unexplained noise the model has to absorb; revisit if the recoil response looks too broad. |
 | 3 | Canonical prong table | The model uses its own internal representation (n, prong[0..n-1]) but **the delivered output is a ROOT ntuple with the same branch names, types and fill conventions as the open-data tuple, pruned to the modelled branches**, so downstream code needs no changes. Schema in §13. |
 | 4 | Which recoil definitions | Model the ones that are filled and used; the set is listed in §13. |
-| 5 | Overlay conditions as context | Keep; start with `phys_n_dead_discr_pair` and `numi_pot`, verify against data. |
+| 5 | Overlay conditions as context | Measured negligible effect; **dropped from v1 context**, marginalized (§13.2). |
 | 6 | Vertex as controllable context | Vertex `(x, y, z)` in the global context; derived geometry features deferred (§4). |
 | 7 | Playlist scope | **ME FHC only** for now. |
 | 8 | Systematics-aware training | Ignore for now. |
@@ -323,22 +323,23 @@ record. Nothing generator-specific is allowed in. Steps:
 3. Drop hadrons (p, pi±, pi0, K, hyperons) with KE < 50 MeV. Leptons and photons are not cut.
 4. Map PDG to a species class: mu-, e±, gamma, p, pi+, pi-, pi0, K±, K0(L/S), hyperon, other.
 
-Context: `vtx_x, vtx_y, vtx_z` (mm), `target_Z`, `target_A`, `n_dead_discr_pair`, `spill_pot`. For MC these are
-`mc_vtx[0:3]`, `mc_targetZ`, `mc_targetA`, `phys_n_dead_discr_pair`, `numi_pot`. `beamConfig` is constant for
-FHC-only and omitted. For a new generator the vertex and target are supplied by the user or sampled from the MC
-vertex distribution; detector conditions are sampled from the MC/data distribution of the run period.
+Context: `vtx_x, vtx_y, vtx_z` (mm), `target_Z`, `target_A`. For MC these are `mc_vtx[0:3]`, `mc_targetZ`,
+`mc_targetA`. `beamConfig` is constant for FHC-only and omitted. Per-spill detector conditions (dead channels,
+spill intensity) were measured to have no visible effect on the reco variables in this sample (§13.2 note) and
+are **marginalized over**, i.e. the surrogate reproduces the ME FHC run-condition mixture it was trained on. For a
+new generator the vertex and target are supplied by the user or sampled from the MC vertex distribution.
 
 ### 13.2 Model interface
 
 **Input**
 - Particle set, variable size `n_true` (≤ ~60 after cuts): per particle `class_id` (int) and `(px, py, pz)`.
-- Context vector, 7 numbers: `vtx_x, vtx_y, vtx_z, target_Z, target_A, n_dead_discr_pair, spill_pot`.
+- Context vector, 5 numbers: `vtx_x, vtx_y, vtx_z, target_Z, target_A`.
 
 **Output** (what the model generates; everything else in the ntuple is derived or copied)
 
 | Group | Variables | Type |
 |---|---|---|
-| Tier 0 | `reco_exists` (muon candidate found), `minos_ok`, `minos_used_range`, `minos_used_curvature`, `helicity_is_numu` | binary |
+| Tier 0 | `reco_exists` (muon candidate found), `minos_ok` (muon matched to a good MINOS track), `mu_charge_neg` (reconstructed muon charge sign, defined only when `minos_ok`) | binary |
 | Muon | `mu_px, mu_py, mu_pz` | continuous (3) |
 | Vertex | `rvtx_x, rvtx_y, rvtx_z` | continuous (3) |
 | Calorimetry | `recoil_E`, `recoil_passivecorrected`, `hadron_recoil`, `recoil_nonmuon_nonvtx100mm`, `nonvtx_iso_blobs_energy` | continuous (5) |
@@ -346,7 +347,26 @@ vertex distribution; detector conditions are sampled from the MC/data distributi
 | Prongs, per prong `i < n_prongs` | `pi_px, pi_py, pi_pz` (pion-hypothesis momentum), `has_proton_fit`, `p_P` (proton-hypothesis momentum magnitude), `proton_score1`, `is_exiting` | 3 continuous, 1 binary, 2 continuous, 1 binary |
 
 Everything that is a function of these (energies, angles, `Q2`, `W`, `E_nu`, `multiplicity`, `hadron_number`,
-`minos_trk_p`) is computed at decode time. Internal reparameterizations (e.g. generating the muon as a ratio to
+`minos_trk_p`, `nuHelicity`, sign of `muon_qp`) is computed at decode time.
+
+Notes on what was dropped or kept in Tier 0 and the context, from measurements on 60k reco events:
+
+- `minos_ok` is a genuine reco outcome, not a playlist property: for CC nu_mu it is 98% for muons within 5° of
+  the beam and 3% beyond 30°; 2% below 1 GeV and 94% above 4 GeV. It gates whether the muon momentum comes from
+  MINOS at all, so analyses cut on it and the surrogate must produce it.
+- `minos_used_range` / `minos_used_curvature` say how MINOS measured the momentum: by range if the muon stopped
+  inside MINOS (identical to `minos_trk_is_contained`), by curvature in the magnetic field if it exited. Exactly
+  one is set when `minos_ok`, neither otherwise; range dominates at low P (81% at 1–2 GeV) and vanishes above
+  8 GeV. Resolution differs between the two, but analyses do not cut on them, so they are **dropped from the
+  interface**; the muon momentum model absorbs the mixture.
+- `nuHelicity` (1 = neutrino, 2 = antineutrino) is exactly `sign(muon_qp) < 0`, i.e. the reconstructed muon
+  charge from MINOS curvature; it defaults to 1 when not MINOS-matched. Charge mis-ID is 3.4% for matched true
+  nu_mu. Kept as the binary `mu_charge_neg` because FHC analyses cut on it.
+- `phys_n_dead_discr_pair` counts front-end discriminator channels that were dead (busy after earlier hits in the
+  spill) during the event, a dead-time / pileup measure; the standard cut uses the upstream-projection variant
+  and passes 98% here. `numi_pot` is the protons on target of the spill, i.e. beam intensity, hence the amount of
+  overlaid pileup. Correlations with `n_nonvtx_iso_blobs`, `recoil_E`, and `multiplicity` are below 0.07, and
+  POT terciles show no shift in any of them. Both are **dropped from the context** for v1 and marginalized. Internal reparameterizations (e.g. generating the muon as a ratio to
 the true muon momentum, or log-scaling energies) are free choices of the training code and must not leak into
 this interface. Tier 2 (prongs) is absent in the M2 model and present from M4 on; the interface is the same.
 
@@ -406,4 +426,4 @@ Branches that are constant or unfilled in this sample (`blob_ccqe_recoil_E`, `EM
    `scripts/`; `tests/`; `notebooks/` for EDA only.
 8. **First dataset.** The single ME FHC file for the scaffold; 5 or more files before M2.
 9. **Open:** exact z range and target-Z set for the training population (check against the reco tree).
-10. **Open:** whether `n_nonvtx_iso_blobs` and `nonvtx_iso_blobs_energy` belong in the M2 model or wait for M4.
+10. `n_nonvtx_iso_blobs` and `nonvtx_iso_blobs_energy` wait for M4 (decided 2026-09-23).
