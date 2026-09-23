@@ -1,0 +1,16 @@
+# ROOT ntuples are tens of GB; never commit them
+*.root
+data/
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.egg-info/
+.venv/
+# outputs
+runs/
+outputs/
+*.parquet
+*.h5
+*.npz
+*.log
