@@ -258,12 +258,12 @@ directly useful for validation. Start with flow matching for both tiers to keep 
 
 ## 9. Data and compute plan
 
-- Slim each AnaTuple to Parquet with only the ~80 branches listed in `tuple_notes.md` (truth particles, context,
-  Tier 0–2 targets, truth-match fields), using uproot in chunks. Expect well under 1 GB per 20 GB input file.
-  Also slim the `Truth` tree (unreconstructed events) so Tier 0 has its denominator.
-- The example file has 168k reco / 519k truth events. The full ME FHC playlist is many files; even 5–10 files
-  give a million reco events, which is plenty for Tier 1 and adequate for Tier 2. Get files from
-  https://minerva.fnal.gov/getdata.
+- Slim each AnaTuple to Parquet with only the ~80 branches we use (`sim2reco/io/branches.py`): 105 MB reco +
+  194 MB truth per 20 GB file. The files are **streamed from the xrootd door** (`scripts/slim_remote.py`,
+  `root://fndcadoor.fnal.gov:1095/...`, list in `configs/MediumEnergy_FHC_StandardMC_Playlist1M.txt`); uproot
+  reads only the requested baskets, so no ROOT file is ever stored locally. About 4 minutes per file.
+- Disk budget for slimmed inputs: 9.5 GB (user constraint, 2026-09-23), i.e. about 30 of the 98 files of
+  playlist 1M, ~5M reco / 16M truth events. More on request.
 - Local machine: 20 cores, 30 GB RAM, one RTX 3090 (24 GB). Enough for everything above. Environment: Python 3.9
   venv from `scripts/setup_env.sh` (§14.6).
 
@@ -286,8 +286,8 @@ directly useful for validation. Start with flow matching for both tiers to keep 
 
 | # | Deliverable | Exit criterion |
 |---|---|---|
-| M0 | Slimming script, Parquet dataset from ≥ 3 MC files, EDA notebook reproducing `tuple_notes.md` | Dataset loads in seconds; truth/reco pairing verified with `eventID` |
-| M1 | Baselines: GBDT efficiency + multiplicity, MDN muon response | Numbers to beat; sanity plots |
+| M0 ✅ | Slimming (local or streamed from xrootd), Parquet dataset, prong table round trip, tests | Done 2026-09-23: 300 MB Parquet per 20 GB file, loads in 2 s, exact round trip |
+| M1 ✅ | Baselines: GBDT efficiency / MINOS / charge / multiplicity, MDN muon response + recoil | Done 2026-09-23: `reports/m1/`, `reports/performance/main.tex` |
 | M2 | Tier 0 + Tier 1 conditional flow-matching model, random split | Closure: real-vs-surrogate classifier AUC < 0.55 on held-out events |
 | M3 | Physics-holdout extrapolation study (§7), ensemble OOD score | Written report of where it works and where it does not |
 | M4 | Tier 2 prong set model (cardinality + set flow matching) | Reproduces multiplicity confusion and prong kinematics |

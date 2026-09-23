@@ -5,6 +5,7 @@ Both trees are slimmed: `MasterAnaDev` (reconstructed events with truth attached
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import awkward as ak
 import uproot
@@ -16,7 +17,10 @@ _TREE_BRANCHES = {"MasterAnaDev": RECO_TREE_BRANCHES, "Truth": TRUTH_TREE_BRANCH
 
 def slim_tree(root_path: str, tree: str, out_path: str, step_size: str = "200 MB",
               entry_stop: int | None = None) -> int:
-    """Write the selected branches of `tree` in `root_path` to a single Parquet file. Returns entries written."""
+    """Write the selected branches of `tree` in `root_path` to a single Parquet file. Returns entries written.
+
+    `root_path` may be a local path or an xrootd URL (root://...); uproot then streams only the needed baskets.
+    """
     branches = _TREE_BRANCHES[tree]
     chunks = []
     n = 0
@@ -28,9 +32,13 @@ def slim_tree(root_path: str, tree: str, out_path: str, step_size: str = "200 MB
         for arr in t.iterate(branches, step_size=step_size, entry_stop=entry_stop, library="ak"):
             chunks.append(arr)
             n += len(arr)
+        typenames = {b: t[b].typename for b in branches}
+        typenames.update({b + "_sz": t[b + "_sz"].typename for b in branches if b + "_sz" in t.keys()})
     out = ak.concatenate(chunks) if len(chunks) > 1 else chunks[0]
     pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     ak.to_parquet(out, out_path)
+    # keep the ROOT typenames next to the Parquet so the ntuple writer can be checked without the ROOT file
+    pathlib.Path(out_path).with_suffix(".typenames.json").write_text(json.dumps(typenames, indent=0))
     return n
 
 

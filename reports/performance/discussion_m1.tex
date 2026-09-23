@@ -1,0 +1,33 @@
+The baselines set three kinds of reference for the generative model.
+
+\paragraph{What is already easy.} MINOS matching is almost a deterministic function of the true muon
+kinematics: the tree reaches AUC~0.987 and cuts the log loss from 0.52 to 0.10. The reconstruction
+efficiency is predicted without visible bias across muon angle, muon momentum and hadron count
+(Fig.~\ref{fig:eff}); its residual log loss (0.42 versus 0.67 marginal) is irreducible randomness in
+whether a muon track is found, not a modelling deficit. The recoil-energy median follows the true hadronic
+kinetic energy over two decades and the MDN reproduces the 16--84\% band (Fig.~\ref{fig:recoil}).
+
+\paragraph{What needs a proper generative model.} The muon momentum response is bimodal in the sense that
+matters for analyses: MINOS-matched muons have a $\pm 9\%$ core, unmatched muons a spread of more than a
+factor two in either direction. The $K=1$ Gaussian cannot represent this (Table~\ref{tab:nll}); the
+$K=8$ MDN does, with $W_1 = 0.008$ in $\log(P_\mathrm{reco}/P_\mathrm{true})$ for matched and $0.05$ for
+unmatched muons. But the MDN sees only 48 summary features. Correlations between the muon response, the
+recoil energy and the prong content of the same event are not modelled at all here, and these are exactly
+what a cross-section analysis with a multi-variable signal definition depends on. That joint structure is the
+job of the M2 flow-matching model over the particle set.
+
+\paragraph{Where the baseline is weak.} Multiplicity is the hardest target so far. The tree beats the
+marginal (log loss 0.84 versus 1.06, accuracy 0.62 versus 0.44) and reproduces the mean reco prongs versus
+true charged hadrons up to three hadrons (Fig.~\ref{fig:mult}), but the confusion table shows that events
+with four or more true charged hadrons are still mostly assigned one or two prongs, with the saturation at
+high multiplicity slightly overshot. Whether the saturation is learnable from the particle set rather than
+from counts is one of the questions the M2 model must answer; it also bears directly on the extrapolation
+study, since high-multiplicity final states are where alternative generators differ most.
+
+\paragraph{Caveats.} All numbers are from a single MC file (368k CC~$\nu_\mu$ events, 39.6\% reconstructed)
+and a single seed. Test negative log-likelihoods for the muon MDN are quoted with the same $\pm 25\sigma$
+robust clipping used in training; without it a handful of muons with $|p_x/p_z| \gg 1$ dominate the mean.
+The features exclude generator-internal labels by design, so nothing here would change for another
+generator's final states, but neither has that transfer been tested yet: the extrapolation holdouts of
+the design document (train on QE+RES+2p2h, test on DIS; train on $\le 2$ visible hadrons, test on more)
+are scheduled for M3.

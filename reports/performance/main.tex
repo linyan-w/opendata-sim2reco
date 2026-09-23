@@ -1,0 +1,142 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\graphicspath{{../m1/figures/}{figures/}}
+
+\title{MINERvA open-data sim$\to$reco surrogate:\\ performance report}
+\author{L.~Wan\thanks{lwan@fnal.gov}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We document the performance of successive versions of a per-event surrogate that maps GENIE final-state
+particles to MasterAnaDev reconstructed quantities, trained on the MINERvA open-data Medium Energy FHC Monte
+Carlo. This version covers the M1 baselines: gradient-boosted trees for the reconstruction efficiency, MINOS
+matching, muon charge and hadron-prong multiplicity, and mixture density networks for the muon momentum
+response and the recoil energy. These numbers are the reference the generative model (M2) has to beat.
+\end{abstract}
+
+\section{Setup}
+\label{sec:setup}
+
+\paragraph{Data.} MINERvA open data~\cite{opendata}, Medium Energy FHC standard MC, playlist 1M, file
+\texttt{run00113069}. The \texttt{Truth} tree holds every generated interaction; the \texttt{MasterAnaDev}
+tree holds those with a reconstructed muon candidate together with a copy of the truth. The v1 training
+population is CC $\nu_\mu$ interactions with true vertex $z \ge 4000$~mm; 39.6\% of them have a reco entry.
+
+\paragraph{Inputs.} GENIE final-state particles after intranuclear FSI (\texttt{mc\_FSPart*}), dropping
+neutrinos, neutrons, GENIE pseudo-particles and nuclear remnants, and hadrons with kinetic energy below
+50~MeV. Each particle is a species class and $(p_x, p_y, p_z)$. The context is the true vertex $(x,y,z)$
+and the struck nucleus $(Z, A)$. Generator-internal labels (interaction mode, $Q^2$, $W$, $E_\nu$) are
+deliberately not used.
+
+\paragraph{Splits.} Events are split by MC subrun (not by event) into train/validation/test:
+\begin{center}\input{../m1/tables/splits.tex}\end{center}
+All numbers below are on the test split.
+
+\paragraph{Baseline features.} The M1 models use 48 hand-crafted event summaries (true muon momentum and
+beam-frame angles; particle counts, summed and leading kinetic energies per species; leading-hadron angle
+and class; hadronic $\sum p_T$; the context). The generative model of M2 will consume the particle set
+directly.
+
+\section{M1 baselines}
+\label{sec:m1}
+
+\subsection{Tier 0: efficiency, MINOS matching, charge}
+
+Histogram-based gradient-boosted trees (\texttt{sklearn}, 15 leaves, learning rate 0.05, $\ell_2 = 1$,
+early stopping). Table~\ref{tab:tier0} compares the test log loss to the marginal (constant-rate) predictor.
+
+\begin{table}[h]\centering
+\input{../m1/tables/tier0.tex}
+\caption{Tier 0 binary targets. Lower log loss is better; the marginal column is the constant predictor.}
+\label{tab:tier0}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{m1_efficiency_calibration.png}
+\caption{Observed versus GBDT-predicted probability that a CC~$\nu_\mu$ event has a reconstructed muon
+candidate, in bins of true muon angle, true muon momentum, and number of hadrons after cuts.}
+\label{fig:eff}
+\end{figure}
+
+\begin{figure}[h]\centering
+\includegraphics[width=0.7\textwidth]{m1_minos_calibration.png}
+\caption{Observed versus predicted MINOS-match probability among reconstructed events.}
+\label{fig:minos}
+\end{figure}
+
+\subsection{Hadron-prong multiplicity}
+
+Multiclass GBDT over $n_\mathrm{prongs} \in \{0,\dots,5,6{+}\}$ among reconstructed events. Sampled
+multiplicities are drawn from the predicted class probabilities.
+
+\begin{table}[h]\centering
+\input{../m1/tables/multiplicity.tex}
+\caption{Multiplicity classifier versus the marginal distribution.}
+\label{tab:mult}
+\end{table}
+
+\begin{table}[h]\centering
+\input{../m1/tables/multiplicity_confusion.tex}
+\caption{Row-normalised confusion between true and sampled reco multiplicity (test split).}
+\label{tab:mult-conf}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=0.7\textwidth]{m1_multiplicity.png}
+\caption{Left: marginal reco prong multiplicity, MasterAnaDev versus GBDT samples. Right: mean reco prongs
+versus true number of charged hadrons after cuts.}
+\label{fig:mult}
+\end{figure}
+
+\subsection{Muon response and recoil energy: mixture density networks}
+
+An MDN with $K$ diagonal-Gaussian components, three hidden layers of 256 units, conditioned on the
+standardised features plus the MINOS-match flag. Targets: $\log(P_\mathrm{reco}/P_\mathrm{true})$ and the
+two slope differences $\Delta(p_x/p_z)$, $\Delta(p_y/p_z)$ for the muon; $\log E_\mathrm{recoil}$ for the
+calorimetric recoil. $K=1$ is a heteroscedastic Gaussian regression; $K=8$ is the baseline proper.
+
+\begin{table}[h]\centering
+\input{../m1/tables/mdn_nll.tex}
+\caption{Test negative log-likelihood per event (natural log, original units). Lower is better.}
+\label{tab:nll}
+\end{table}
+
+\begin{table}[h]\centering\small
+\resizebox{\textwidth}{!}{\input{../m1/tables/mdn_marginals.tex}}
+\caption{Marginal distributions of MasterAnaDev versus one MDN ($K=8$) sample per test event, and the
+1-Wasserstein distance between them (same units as the variable).}
+\label{tab:mdn-marg}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{m1_muon_response.png}
+\caption{Muon response, test split: momentum ratio for MINOS-matched and unmatched muons, and the $x$-slope
+difference.}
+\label{fig:muon}
+\end{figure}
+
+\begin{figure}[h]\centering
+\includegraphics[width=0.7\textwidth]{m1_recoil.png}
+\caption{Recoil energy: marginal (left) and median with 16--84\% band versus true hadronic kinetic energy
+after cuts (right).}
+\label{fig:recoil}
+\end{figure}
+
+\section{Discussion}
+\label{sec:discussion}
+\input{discussion_m1.tex}
+
+\begin{thebibliography}{9}
+\bibitem{opendata} MINERvA Collaboration, Open Data Release, \url{https://minerva.fnal.gov/opendata/},
+\href{https://doi.org/10.15484/3022562}{doi:10.15484/3022562}.
+\end{thebibliography}
+
+\end{document}
