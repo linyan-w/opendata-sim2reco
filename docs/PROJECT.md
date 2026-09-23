@@ -232,6 +232,10 @@ applies.
 
 ## 8. Model architecture (proposal)
 
+![model schematic](figures/model_schematic.svg)
+
+*Living schematic: `docs/figures/model_schematic.tex`, rendered by `scripts/render_schematic.sh`; colours mark status.*
+
 ```
 truth particles  ──► per-particle features + species embedding ──┐
                                                                   ├──► transformer encoder ──► z (event embedding)

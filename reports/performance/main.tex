@@ -5,7 +5,7 @@
 \usepackage{graphicx}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
-\graphicspath{{../m1/figures/}{figures/}}
+\graphicspath{{../m1/figures/}{figures/}{../../docs/figures/}}
 
 \title{MINERvA open-data sim$\to$reco surrogate:\\ performance report}
 \author{L.~Wan\thanks{lwan@fnal.gov}}
@@ -44,6 +44,18 @@ All numbers below are on the test split.
 beam-frame angles; particle counts, summed and leading kinetic energies per species; leading-hadron angle
 and class; hadronic $\sum p_T$; the context). The generative model of M2 will consume the particle set
 directly.
+
+\section{Model}
+\label{sec:model}
+Figure~\ref{fig:schematic} shows the surrogate as designed, with the status of each block at the time of this
+report. The M1 baselines of Section~\ref{sec:m1} replace the encoder and the generative heads by summary
+features, trees and mixture density networks; the decoder and the data pipeline are shared with the final model.
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{model_schematic.pdf}
+\caption{Model schematic. Green: implemented; grey: planned. Dashed arrows are conditioning or training signals.}
+\label{fig:schematic}
+\end{figure}
 
 \section{M1 baselines}
 \label{sec:m1}

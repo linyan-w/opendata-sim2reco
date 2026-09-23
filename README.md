@@ -7,6 +7,12 @@ kinematic regions).
 
 Status: M0 (data pipeline) and M1 (baselines) done; M2 (flow-matching model) next. Read [`docs/PROJECT.md`](docs/PROJECT.md) first; performance numbers are in `reports/performance/` (LaTeX, compiled with tectonic).
 
+## Model schematic
+
+![model schematic](docs/figures/model_schematic.svg)
+
+Source: `docs/figures/model_schematic.tex` (TikZ); regenerate with `bash scripts/render_schematic.sh`. Green = done, orange = in progress, grey = planned.
+
 ## Quick start
 
 ```
