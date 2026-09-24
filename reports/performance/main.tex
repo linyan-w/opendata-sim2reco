@@ -5,9 +5,9 @@
 \usepackage{graphicx}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
-\graphicspath{{../m1/figures/}{../m2/figures/}{../m3/figures/}{figures/}{../../docs/figures/}}
+\usepackage{placeins}
 
-\title{MINERvA open-data sim$\to$reco surrogate:\\ performance report}
+\title{A generative surrogate of MINERvA reconstruction\\ trained on the open-data Monte Carlo: performance report}
 \author{L.~Wan\thanks{lwan@fnal.gov}}
 \date{\today}
 
@@ -15,251 +15,273 @@
 \maketitle
 
 \begin{abstract}
-We document the performance of successive versions of a per-event surrogate that maps GENIE final-state
-particles to MasterAnaDev reconstructed quantities, trained on the MINERvA open-data Medium Energy FHC Monte
-Carlo. This version covers the M1 baselines: gradient-boosted trees for the reconstruction efficiency, MINOS
-matching, muon charge and hadron-prong multiplicity, and mixture density networks for the muon momentum
-response and the recoil energy. These numbers are the reference the generative model (M2) has to beat.
+We describe and evaluate a per-event surrogate of the MINERvA reconstruction chain, trained on the open-data
+Medium Energy FHC Monte Carlo. Given a generator's final-state particles and the interaction vertex, the model
+samples whether a muon candidate is reconstructed, the MINOS match and charge, the reconstructed muon momentum,
+vertex and calorimetric energies, and a variable-size set of hadron prongs, and writes them as a pruned
+MasterAnaDev ntuple. On a held-out subrun split, gradient-boosted classifiers trained to tell surrogate from
+MasterAnaDev output reach AUC 0.534 on the event-level reconstructed quantities and
+0.516 on the prong content, with and without the truth information as additional input. All
+one-dimensional marginals agree to a Wasserstein distance below 0.06 in standardised units. We document the
+remaining discrepancies and the parts of the tuple that are derived rather than generated.
 \end{abstract}
 
 \section{Setup}
 \label{sec:setup}
 
-\paragraph{Data.} MINERvA open data~\cite{opendata}, Medium Energy FHC standard MC, playlist 1M, file
-\texttt{run00113069}. The \texttt{Truth} tree holds every generated interaction; the \texttt{MasterAnaDev}
-tree holds those with a reconstructed muon candidate together with a copy of the truth. The v1 training
-population is CC $\nu_\mu$ interactions with true vertex $z \ge 4000$~mm; 39.6\% of them have a reco entry.
+\paragraph{Data.} MINERvA open data~\cite{opendata}, Medium Energy FHC standard MC, playlist 1M. The
+\texttt{Truth} tree holds every generated interaction and the \texttt{MasterAnaDev} tree those with a
+reconstructed muon candidate, together with a copy of the truth. The training population is CC~$\nu_\mu$
+interactions with true vertex $z \ge 4000$\,mm; neutral-current, $\nu_e$ and antineutrino events are out of
+scope for this version. \input{../m3/tables/data.tex}
 
 \paragraph{Inputs.} GENIE final-state particles after intranuclear FSI (\texttt{mc\_FSPart*}), dropping
 neutrinos, neutrons, GENIE pseudo-particles and nuclear remnants, and hadrons with kinetic energy below
-50~MeV. Each particle is a species class and $(p_x, p_y, p_z)$. The context is the true vertex $(x,y,z)$
-and the struck nucleus $(Z, A)$. Generator-internal labels (interaction mode, $Q^2$, $W$, $E_\nu$) are
-deliberately not used.
+50\,MeV. Each particle enters as a species class (11 classes) and its momentum $(p_x, p_y, p_z)$; the context is
+the true vertex $(x,y,z)$ and the struck nucleus $(Z, A)$. Generator-internal labels (interaction mode, $Q^2$,
+$W$, $E_\nu$) are deliberately not used, so that the surrogate depends only on what physically enters the
+detector and can be applied to final states from any generator.
 
-\paragraph{Splits.} Events are split by MC subrun (not by event) into train/validation/test:
-\begin{center}\input{../m1/tables/splits.tex}\end{center}
-All numbers below are on the test split.
-
-\paragraph{Baseline features.} The M1 models use 48 hand-crafted event summaries (true muon momentum and
-beam-frame angles; particle counts, summed and leading kinetic energies per species; leading-hadron angle
-and class; hadronic $\sum p_T$; the context). The generative model of M2 will consume the particle set
-directly.
+\paragraph{Splits and metrics.} Events are split by MC subrun into train, validation and test; every number
+below is on the test split. Two kinds of metric are used throughout. For one-dimensional distributions we quote
+the median with the 16--84\% interval for MasterAnaDev and for one surrogate sample per event, and the
+1-Wasserstein distance $W_1$ between them. For closure we train a gradient-boosted classifier
+(\texttt{HistGradientBoostingClassifier}) to separate MasterAnaDev from surrogate output on half of the test
+events and quote its AUC on the other half: 0.5 means indistinguishable. The classifier is run on the
+reconstructed quantities alone (a marginal test) and on the reconstructed quantities together with 48 summary
+features of the true final state (a conditional test); the latter is sensitive to whether the surrogate's
+response is right \emph{given} the truth, not only on average.
 
 \section{Model}
 \label{sec:model}
-Figure~\ref{fig:schematic} shows the surrogate as designed, with the status of each block at the time of this
-report. The M1 baselines of Section~\ref{sec:m1} replace the encoder and the generative heads by summary
-features, trees and mixture density networks; the decoder and the data pipeline are shared with the final model.
+
+Figure~\ref{fig:schematic} shows the architecture. A transformer set encoder over the particle tokens, with a
+global token carrying the context, produces an event embedding $z$ and per-particle states $h_i$. Four groups of
+heads read them, and are sampled in order: (i) classification heads for the reconstruction flag, the MINOS match,
+the muon charge and the prong multiplicity $N$; (ii) a vertex-plane head, because the reconstructed vertex $z$
+lies exactly on one of about 200 scintillator-plane positions 22\,mm apart for 69\% of events, which predicts
+``not snapped'', ``snapped to the plane nearest the true $z$ plus $\delta\in[-3,3]$'' or ``snapped to a farther
+plane'' from $z$, the flags, $N$ and the phase of the true $z$ within the plane cycle; (iii) an event flow,
+conditional flow matching over 9 variables (muon momentum as a response to the true muon, vertex residual, three
+calorimetric energies with exact zeros dequantised), conditioned on $z$, the flags and $N$; (iv) a prong set
+flow, masked flow matching over $N$ prong tokens of 10 fields (has-kinematics flag, direction, pion- and
+proton-hypothesis momenta, proton score, exiting and primary flags; binary fields dequantised), with a
+permutation-equivariant velocity network that self-attends over prongs and cross-attends the particle states,
+conditioned on $z$, the flags, $N$ and the event-flow sample. A decoder inverts the transforms, snaps the vertex
+when the class head says so, and fills the pion, proton and secondary-proton blocks of the tuple through the
+prong table. Two calorimetric branches, \texttt{recoil\_passivecorrected} and \texttt{hadron\_recoil}, are
+deterministic MasterAnaDev calibrations of \texttt{recoil\_E} with point masses at fixed ratios and are
+derived at decode time from a $z$-binned median ratio rather than generated (Section~\ref{sec:limits}).
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{model_schematic.pdf}
-\caption{Model schematic. Green: implemented; grey: planned. Dashed arrows are conditioning or training signals.}
+\includegraphics[width=\textwidth]{../../docs/figures/model_schematic.pdf}
+\caption{Architecture of the surrogate. Solid arrows are data flow, dashed arrows conditioning on quantities
+sampled by an earlier head, the dotted arrow cross-attention to the particle token states.}
 \label{fig:schematic}
 \end{figure}
+\FloatBarrier
 
-\section{M1 baselines}
-\label{sec:m1}
+\section{Performance}
+\label{sec:perf}
 
-\subsection{Tier 0: efficiency, MINOS matching, charge}
+\subsection{Event classification heads}
+\label{sec:heads}
 
-Histogram-based gradient-boosted trees (\texttt{sklearn}, 15 leaves, learning rate 0.05, $\ell_2 = 1$,
-early stopping). Table~\ref{tab:tier0} compares the test log loss to the marginal (constant-rate) predictor.
+Table~\ref{tab:tier0} gives the test log loss and AUC of the three binary heads against two references: the
+constant-rate (marginal) predictor and a gradient-boosted tree trained on the 48 hand-built summary features
+of the final state. The surrogate, which sees the raw particle set, beats the tree on every target, most
+clearly for the reconstruction flag (0.364 versus 0.423). The predicted
+reconstruction probability is unbiased as a function of the true hadron count (Fig.~\ref{fig:heads}, right).
+Table~\ref{tab:mult} does the same for the prong multiplicity; the sampled multiplicity reproduces the
+MasterAnaDev distribution (Fig.~\ref{fig:heads}, left).
 
 \begin{table}[h]\centering
-\input{../m1/tables/tier0.tex}
-\caption{Tier 0 binary targets. Lower log loss is better; the marginal column is the constant predictor.}
+\input{../m3/tables/tier0.tex}
+\caption{Binary heads: test log loss (lower is better) and AUC for the marginal predictor, the tree baseline on
+summary features, and the surrogate.}
 \label{tab:tier0}
 \end{table}
 
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{m1_efficiency_calibration.png}
-\caption{Observed versus GBDT-predicted probability that a CC~$\nu_\mu$ event has a reconstructed muon
-candidate, in bins of true muon angle, true muon momentum, and number of hadrons after cuts.}
-\label{fig:eff}
-\end{figure}
-
-\begin{figure}[h]\centering
-\includegraphics[width=0.7\textwidth]{m1_minos_calibration.png}
-\caption{Observed versus predicted MINOS-match probability among reconstructed events.}
-\label{fig:minos}
-\end{figure}
-
-\subsection{Hadron-prong multiplicity}
-
-Multiclass GBDT over $n_\mathrm{prongs} \in \{0,\dots,5,6{+}\}$ among reconstructed events. Sampled
-multiplicities are drawn from the predicted class probabilities.
-
 \begin{table}[h]\centering
-\input{../m1/tables/multiplicity.tex}
-\caption{Multiplicity classifier versus the marginal distribution.}
+\input{../m3/tables/multiplicity.tex}
+\caption{Prong multiplicity head ($N \in \{0,\dots,8\}$) among reconstructed events.}
 \label{tab:mult}
 \end{table}
 
-\begin{table}[h]\centering
-\input{../m1/tables/multiplicity_confusion.tex}
-\caption{Row-normalised confusion between true and sampled reco multiplicity (test split).}
-\label{tab:mult-conf}
-\end{table}
-
 \begin{figure}[h]\centering
-\includegraphics[width=0.7\textwidth]{m1_multiplicity.png}
-\caption{Left: marginal reco prong multiplicity, MasterAnaDev versus GBDT samples. Right: mean reco prongs
-versus true number of charged hadrons after cuts.}
-\label{fig:mult}
+\includegraphics[width=0.75\textwidth]{../m3/figures/heads_multiplicity_eff.png}
+\caption{Left: reconstructed hadron-prong multiplicity, MasterAnaDev versus one surrogate sample per event.
+Right: observed and predicted probability of a reconstructed muon candidate versus the number of true hadrons
+after the input cuts.}
+\label{fig:heads}
 \end{figure}
+\FloatBarrier
 
-\subsection{Muon response and recoil energy: mixture density networks}
+\subsection{Muon, vertex and calorimetry}
+\label{sec:tier1}
 
-An MDN with $K$ diagonal-Gaussian components, three hidden layers of 256 units, conditioned on the
-standardised features plus the MINOS-match flag. Targets: $\log(P_\mathrm{reco}/P_\mathrm{true})$ and the
-two slope differences $\Delta(p_x/p_z)$, $\Delta(p_y/p_z)$ for the muon; $\log E_\mathrm{recoil}$ for the
-calorimetric recoil. $K=1$ is a heteroscedastic Gaussian regression; $K=8$ is the baseline proper.
-
-\begin{table}[h]\centering
-\input{../m1/tables/mdn_nll.tex}
-\caption{Test negative log-likelihood per event (natural log, original units). Lower is better.}
-\label{tab:nll}
-\end{table}
+Table~\ref{tab:tier1} lists the nine generated event-level variables in the model's standardised space.
+Figure~\ref{fig:muon} shows the muon momentum response separately for MINOS-matched muons, whose ratio
+$P_\mathrm{reco}/P_\mathrm{true}$ has a narrow core, and for unmatched muons, whose response is bimodal
+with a spread of more than a factor of two; the surrogate reproduces both, with $W_1 = 0.004$ and
+0.01 respectively. Figure~\ref{fig:vertex} shows the vertex residuals, whose $z$ component
+carries the plane-snapping structure discussed in Section~\ref{sec:vertex}. Figure~\ref{fig:calo} shows the
+calorimetric energies, including the populations at exactly zero energy reproduced by dequantisation, and the
+two derived branches. Figure~\ref{fig:cond} tests the conditional behaviour: the muon response versus true
+momentum and the recoil energy versus true hadronic kinetic energy follow MasterAnaDev in median and 16--84\%
+band over the full range, with one exception, the 1--1.5\,GeV muon bin (15,547 events, 3\% of the sample,
+dominated by unmatched muons) where the medians differ by 0.0 standardised units.
+Figure~\ref{fig:corr} compares the correlation matrices of the nine variables; the largest difference in any
+coefficient is 0.005.
 
 \begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../m1/tables/mdn_marginals.tex}}
-\caption{Marginal distributions of MasterAnaDev versus one MDN ($K=8$) sample per test event, and the
-1-Wasserstein distance between them (same units as the variable).}
-\label{tab:mdn-marg}
+\resizebox{\textwidth}{!}{\input{../m3/tables/tier1_marginals.tex}}
+\caption{Event-level generated variables on reconstructed test events, in the model's robustly standardised
+space; one surrogate sample per event with the flags, multiplicity and vertex class also sampled.}
+\label{tab:tier1}
 \end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{m1_muon_response.png}
-\caption{Muon response, test split: momentum ratio for MINOS-matched and unmatched muons, and the $x$-slope
-difference.}
+\includegraphics[width=\textwidth]{../m3/figures/tier1_muon.png}
+\caption{Muon response in model space: $\log(P_\mathrm{reco}/P_\mathrm{true})$ for MINOS-matched (left) and
+unmatched (centre) muons, and the difference of the projected angle $\theta_x$ (right).}
 \label{fig:muon}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.7\textwidth]{m1_recoil.png}
-\caption{Recoil energy: marginal (left) and median with 16--84\% band versus true hadronic kinetic energy
-after cuts (right).}
-\label{fig:recoil}
+\includegraphics[width=\textwidth]{../m3/figures/tier1_vertex.png}
+\caption{Reconstructed-minus-true vertex residuals in model space (asinh-compressed).}
+\label{fig:vertex}
 \end{figure}
-
-\section{M2: set encoder with flow-matching Tier 1}
-\label{sec:m2}
-
-The first surrogate proper (Fig.~\ref{fig:schematic}): a transformer set encoder over the particle tokens
-(class embedding plus scaled momentum features) with a global context token; Tier 0 and cardinality heads on
-the event embedding; and a conditional flow-matching model (linear path, Gaussian source, midpoint sampler
-with 100 steps) for the 9 generated Tier 1 variables, conditioned on the embedding, the Tier 0 flags and the prong
-multiplicity; two further calorimetric branches are derived at decode time (Section~\ref{sec:m2-iter}). Prong-level output is M3. Internally the muon is generated as $\log(P_\mathrm{reco}/P_\mathrm{true})$ and two slope
-differences, the vertex as a residual, energies as $\log(E+1)$ with exact zeros dequantised into a negative
-band; muon and vertex columns are asinh-compressed so their tails are logarithmic; all robustly standardised.
-The encoder has 4 layers of width 128, the flow 5 layers of width 768; training is joint on all four losses.
-
-\paragraph{Data.} \input{../m2/tables/data.tex}
-
-\input{discussion_m2_iterations.tex}
-
-\subsection{Results}
-
-\begin{table}[h]\centering
-\input{../m2/tables/tier0.tex}
-\caption{Tier 0 test log loss and AUC: marginal predictor, M1 trees on summary features, M2 surrogate on the
-particle set.}
-\label{tab:m2-tier0}
-\end{table}
-
-\begin{table}[h]\centering
-\input{../m2/tables/multiplicity.tex}
-\caption{Prong multiplicity head versus the M1 tree.}
-\label{tab:m2-mult}
-\end{table}
-
-\begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../m2/tables/tier1_marginals.tex}}
-\caption{Tier 1 marginals on reconstructed test events, in the model's robustly standardised space, one
-surrogate sample per event with Tier 0 flags and multiplicity also sampled.}
-\label{tab:m2-tier1}
-\end{table}
-
-\begin{table}[h]\centering
-\input{../m2/tables/closure.tex}
-\caption{Closure test: a gradient-boosted classifier trained to separate MasterAnaDev from surrogate output on
-half of the test split, AUC on the other half. 0.5 is perfect closure; the M2 exit criterion is $< 0.55$.}
-\label{tab:m2-closure}
-\end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{m2_muon.png}
-\caption{M2 muon response (model space): matched, unmatched, and $x$-slope difference.}
-\end{figure}
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{m2_calorimetry.png}
-\caption{M2 calorimetric variables; the spike at zero is the exactly-zero population reproduced by dequantisation.}
-\end{figure}
-\begin{figure}[h]\centering
-\includegraphics[width=0.75\textwidth]{m2_conditionals.png}
-\caption{M2 conditionals: muon response versus true momentum and recoil versus true hadronic KE (median, 16--84\%).}
-\end{figure}
-\begin{figure}[h]\centering
-\includegraphics[width=0.75\textwidth]{m2_correlations.png}
-\caption{Correlation matrices of the 11 Tier 1 variables, MasterAnaDev versus surrogate.}
-\end{figure}
-\begin{figure}[h]\centering
-\includegraphics[width=0.75\textwidth]{m2_multiplicity_eff.png}
-\caption{M2 sampled prong multiplicity and efficiency calibration versus true hadron count.}
+\includegraphics[width=\textwidth]{../m3/figures/tier1_calorimetry.png}
+\caption{Calorimetric branches, $\log(E+1)$. The first three are generated; the spike at zero is the exactly-zero
+population. The last two are derived from \texttt{recoil\_E} at decode time.}
+\label{fig:calo}
 \end{figure}
 
-\section{M3: prong set and vertex plane}
-\label{sec:m3}
+\begin{figure}[h]\centering
+\includegraphics[width=0.75\textwidth]{../m3/figures/tier1_conditionals.png}
+\caption{Conditional response: median and 16--84\% band of the muon momentum ratio versus true muon momentum
+(left) and of $\log E_\mathrm{recoil}$ versus true hadronic kinetic energy after cuts (right).}
+\label{fig:cond}
+\end{figure}
 
-Tier 2 adds two components to the M2 surrogate, trained jointly with all M2 losses from a warm start of the
-M2 weights. (i) A \emph{masked set flow} for the hadron prongs: given the sampled multiplicity $N$, $N$ prong
-tokens of 10 dimensions (has-kinematics flag, unit direction, $\log P_\pi$, proton-fit flag, $\log P_p$, proton
-score logit, exiting and primary flags; binary fields dequantised, absent fields filled with noise) are
-generated by flow matching with a permutation-equivariant velocity network that self-attends over prongs and
-cross-attends the encoder's particle tokens, conditioned on the event embedding, the Tier 0 flags, $N$ and the
-Tier 1 vector. (ii) A \emph{vertex-plane head}: the reconstructed $z$ lies exactly on one of about 180
-scintillator-plane positions 22\,mm apart for 69\% of events, so a categorical head predicts ``not snapped''
-or ``snapped to the plane nearest the true $z$ plus $\delta \in [-3,3]$''; the continuous flow learns the
-dequantised residual and the decoder snaps back when the head says so. Data: \input{../m3/tables/data.tex}
+\begin{figure}[h]\centering
+\includegraphics[width=0.75\textwidth]{../m3/figures/tier1_correlations.png}
+\caption{Correlation matrices of the nine event-level variables (order as in Table~\ref{tab:tier1}).}
+\label{fig:corr}
+\end{figure}
+\FloatBarrier
+
+\subsection{Hadron prongs}
+\label{sec:prongs}
+
+Table~\ref{tab:prongs} compares the prong-level marginals over all prongs of reconstructed test events. A
+prong either carries kinematics (a direction and a pion-hypothesis momentum, 77\% of prongs) or
+nothing but its existence; 65\% also have a proton fit. Direction, both momentum hypotheses and the
+proton score are reproduced to $W_1 \le 0.006$ (Fig.~\ref{fig:prongs}), and the per-event
+counts of prongs by category to within one per cent (Fig.~\ref{fig:prong-event}). No prong-to-true-particle
+correspondence is generated; the flow learns the prong set given the particle set and any assignment lives
+implicitly in the cross-attention.
 
 \begin{table}[h]\centering
 \input{../m3/tables/prongs.tex}
-\caption{Prong-level marginals over all prongs of reconstructed test events (fractions) and, for prongs with
-the corresponding fit, median [16\%, 84\%] and $W_1$.}
-\label{tab:m3-prongs}
+\caption{Prong-level marginals: category fractions over all prongs, and median [16\%, 84\%] with $W_1$ for the
+continuous fields of prongs that have the corresponding fit.}
+\label{tab:prongs}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{../m3/figures/m3_prongs.png}
+\caption{Prong direction, pion- and proton-hypothesis momenta, and proton score.}
+\label{fig:prongs}
+\end{figure}
+
+\begin{figure}[h]\centering
+\includegraphics[width=0.9\textwidth]{../m3/figures/m3_prong_event.png}
+\caption{Per-event number of prongs with kinematics, with a proton fit, and exiting the detector.}
+\label{fig:prong-event}
+\end{figure}
+\FloatBarrier
+
+\subsection{Vertex plane}
+\label{sec:vertex}
+
+MasterAnaDev places 68.9\% of reconstructed vertices within 0.1\,mm of a scintillator-plane position;
+68.8\% of those are within three planes of the true $z$ and the rest on a farther plane. The
+surrogate reproduces both fractions (69.0\%, 68.7\%) and the distribution of the
+offset to the nearest plane, including the continuum of unsnapped vertices ($W_1 = 0.07$\,mm,
+Fig.~\ref{fig:vtxplane}). The class head has test log loss 1.573 against 1.621 for the marginal,
+evaluated with sampled flags and multiplicity as its conditions.
+
+\begin{figure}[h]\centering
+\includegraphics[width=0.75\textwidth]{../m3/figures/m3_vertex.png}
+\caption{Left: reconstructed vertex $z$ minus the nearest plane position; the spike at zero is the snapped
+population. Right: vertex class marginals (0 unsnapped, 4 nearest plane, 8 farther plane).}
+\label{fig:vtxplane}
+\end{figure}
+\FloatBarrier
+
+\subsection{Closure tests}
+\label{sec:closure}
+
+Table~\ref{tab:closure} collects the classifier tests on the event-level variables and Table~\ref{tab:closure2}
+those on the prongs and the vertex. On the nine event-level variables the classifier reaches AUC
+0.534 without and 0.534 with the truth features; no block exceeds
+0.534 alone or 0.525 conditionally, and the flags and multiplicity given the truth are at
+0.496. On the prong summaries ($N$, prongs with kinematics, proton fits, exiting prongs, leading
+$P_\pi$ and angle, $\sum P_\pi$, maximum score) the AUC is 0.516 and 0.511; on the truth
+features plus the reconstructed vertex $z$ it is 0.547, the largest remaining value, from the residual
+imperfection of the plane-class head. The design target for these tests was 0.55.
+
+\begin{table}[h]\centering
+\input{../m3/tables/closure.tex}
+\caption{Closure classifiers on the event-level variables: overall, by block, by single variable, and with the
+truth features added.}
+\label{tab:closure}
 \end{table}
 
 \begin{table}[h]\centering
 \input{../m3/tables/tier2_closure.tex}
-\caption{Tier 2 closure. Vertex class: log loss of the marginal versus the head. Snapped fractions and the
-fraction of reconstructed $z$ within 0.1\,mm of a plane. Classifier AUCs on event-level prong summaries
-($N$, prongs with kinematics, proton fits, exiting prongs, leading $P_\pi$ and angle, $\sum P_\pi$, max score),
-without and with the truth features, and on the truth features plus reconstructed vertex $z$.}
-\label{tab:m3-closure}
+\caption{Closure of the prong set and the vertex plane.}
+\label{tab:closure2}
 \end{table}
+\FloatBarrier
 
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{m3_prongs.png}
-\caption{Prong marginals: direction, pion- and proton-hypothesis momenta, proton score.}
-\end{figure}
-\begin{figure}[h]\centering
-\includegraphics[width=0.9\textwidth]{m3_prong_event.png}
-\caption{Per-event prong counts by category.}
-\label{fig:m3-event}
-\end{figure}
-\begin{figure}[h]\centering
-\includegraphics[width=0.75\textwidth]{m3_vertex.png}
-\caption{Left: reconstructed vertex $z$ minus the nearest plane position; the spike at zero is the snapped
-population, reproduced by the discrete head. Right: vertex class marginals.}
-\label{fig:m3-vertex}
-\end{figure}
+\section{Known limitations}
+\label{sec:limits}
 
-\input{discussion_m3.tex}
+\begin{itemize}
+\item \textbf{Derived branches.} \texttt{recoil\_passivecorrected} equals $0.6669\times$\texttt{recoil\_E} for more
+  than 15\% of events and a geometry-dependent ratio otherwise; \texttt{hadron\_recoil} equals
+  $1.385\times$\texttt{recoil\_E} within a MeV for a large fraction. Both are filled from \texttt{recoil\_E} and
+  a median ratio in 250\,mm bins of true $z$, which drops the event-by-event scatter of the calibration (16--84\%
+  widths of about 3\% and 10\%). Analyses that depend on that scatter should use \texttt{recoil\_E}.
+\item \textbf{No truth-matched prongs.} The tuple's per-prong truth match is used only to validate the training
+  data. A per-prong pointer head over the particle tokens would provide it.
+\item \textbf{Low-momentum unmatched muons.} In the 1--1.5\,GeV bin the median response differs from
+  MasterAnaDev (Fig.~\ref{fig:cond}).
+\item \textbf{Scope.} CC~$\nu_\mu$, ME FHC, true vertex $z \ge 4000$\,mm, one training seed, and in-distribution
+  validation only. Extrapolation to final states outside the training phase space is the subject of the next
+  study and is not tested here.
+\end{itemize}
 
-\section{Discussion}
-\label{sec:discussion}
-\input{discussion_m1.tex}
-\input{discussion_m2.tex}
+\appendix
+\section{Data conventions that had to be handled}
+\label{app:conv}
+
+Every one of the following was found because a closure classifier separated real from surrogate output, not
+from one-dimensional plots. They are recorded here because any surrogate of this tuple will meet them.
+(1)~All angle branches are in the beam frame, rotated about $x$ by $-0.05887$\,rad; momentum components are in
+the detector frame. (2)~\texttt{muon\_qp} is $-9999.9$ when there is no MINOS match, so ``negative charge'' must be
+defined as matched and negative. (3)~A prong with $P=1$, $E=0$ is a direction-only sentinel. (4)~Eight of 4.8
+million reconstructed events have NaN or infinite muon momenta or vertices, one a vertex coordinate of order
+$10^{14}$\,mm. (5)~The two calibrated recoil branches are point masses in ratio to \texttt{recoil\_E}. (6)~The
+reconstructed vertex $z$ is quantised to plane positions for 69\% of events, and the plane chosen depends on the
+true $z$'s phase within the 22\,mm cycle. (7)~Broad tails (unmatched muons, vertex residuals) must be compressed,
+not clipped: clipping at $\pm 12$ robust $\sigma$ put 9--17\% of those variables on the clip boundary.
 
 \begin{thebibliography}{9}
 \bibitem{opendata} MINERvA Collaboration, Open Data Release, \url{https://minerva.fnal.gov/opendata/},

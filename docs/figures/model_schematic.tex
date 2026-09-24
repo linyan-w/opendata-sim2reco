@@ -1,121 +1,109 @@
-% Model schematic for the MINERvA sim->reco surrogate. Compile: bash scripts/render_schematic.sh
-% Status colours: green = done, orange = in progress, grey = planned. Update this file as the design evolves.
+% Architecture schematic of the current surrogate (sim2reco.models.surrogate.Surrogate, tier2=True).
+% Compile: bash scripts/render_schematic.sh. Update this file when the architecture changes.
 \documentclass[tikz,border=6pt]{standalone}
-\usetikzlibrary{positioning,fit,arrows.meta,calc,backgrounds,shapes.misc}
+\usetikzlibrary{positioning,fit,arrows.meta,calc,backgrounds}
 \usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
 \usepackage{helvet}\renewcommand{\familydefault}{\sfdefault}
-\definecolor{done}{HTML}{2E8B57}
-\definecolor{wip}{HTML}{E69F00}
-\definecolor{plan}{HTML}{8C8C8C}
 \definecolor{ink}{HTML}{222222}
 \definecolor{paper}{HTML}{FFFFFF}
-\definecolor{soft}{HTML}{F3F4F6}
+\definecolor{cin}{HTML}{0072B2}    % inputs
+\definecolor{cenc}{HTML}{009E73}   % encoder
+\definecolor{ccls}{HTML}{D55E00}   % classification heads
+\definecolor{cgen}{HTML}{E69F00}   % generative heads
+\definecolor{cout}{HTML}{555555}   % decoder / output
 \tikzset{
-  box/.style={draw=ink, line width=0.6pt, rounded corners=3pt, fill=paper, align=left, inner sep=6pt, font=\small, text=ink},
-  status/.style={box, line width=1.4pt},
-  stage/.style={font=\footnotesize\bfseries, text=ink, anchor=south west},
-  note/.style={font=\scriptsize, text=ink!75, align=left},
+  box/.style={draw=ink, line width=1.2pt, rounded corners=3pt, fill=paper, align=left, inner sep=6pt, font=\small, text=ink},
+  head/.style={box, text width=84mm},
+  stage/.style={font=\footnotesize\bfseries, text=ink!80, anchor=south west},
+  dim/.style={font=\scriptsize, text=ink!70},
   arr/.style={-{Latex[length=2.2mm]}, line width=0.7pt, draw=ink},
   arrd/.style={arr, dashed},
-  group/.style={draw=ink!35, rounded corners=6pt, fill=soft, inner sep=8pt},
+  arrc/.style={arr, dotted, line width=0.9pt},
 }
 \begin{document}
 \begin{tikzpicture}[node distance=7mm and 9mm]
 
-% ---------- column 1: truth side ----------
-\node[status, draw=done] (gen) {\textbf{Generator final state} (any generator)\\
-  particles $(\mathrm{pdg},\,p_x,p_y,p_z)$ after FSI\\
-  vertex $(x,y,z)$, struck nucleus $(Z,A)$};
-\node[status, draw=done, below=of gen] (pipe) {\textbf{Input pipeline} \S13.1\\
-  drop $\nu$, $n$, pseudo-particles, remnants\\
-  hadron KE $\ge 50$\,MeV; $\pi^0$ kept as one token\\
-  pdg $\to$ 11 species classes};
-\node[status, draw=done, below=of pipe] (tok) {\textbf{Model input} \S13.2\\
-  particle set $\{(\mathrm{class}_i,\;p_{x,i},p_{y,i},p_{z,i})\}_{i\le n}$\\
-  context $c=(x,y,z,Z,A)$};
+% ---------------- inputs ----------------
+\node[box, draw=cin] (gen) {\textbf{Final-state particles} (any generator)\\
+  $\{(\mathrm{pdg}_i,\;p_{x,i},p_{y,i},p_{z,i})\}$, vertex $(x,y,z)$, nucleus $(Z,A)$};
+\node[box, draw=cin, below=of gen] (pipe) {\textbf{Input pipeline}\\
+  drop $\nu$, $n$, pseudo-particles, remnants; hadron KE $\ge 50$\,MeV\\
+  pdg $\to$ 11 species classes; $\pi^0$ kept as one token};
+\node[box, draw=cin, below=of pipe] (tok) {\textbf{Tokens} $\;n \le 32$ particles\\
+  class embedding $\oplus$ MLP$(\mathrm{asinh}\,\vec p,\ \log|p|,\ \hat p)$ $\to$ 128\\
+  \textbf{global token} $=$ MLP$(x,y,z,Z,A)$ $\to$ 128};
 
-% ---------- column 2: network ----------
-\node[status, draw=done, right=26mm of pipe.east, anchor=west] (enc)
-  {\textbf{Set encoder} (M2, done)\\
-  class embedding $\oplus$ scaled $p$ per token\\
-  $+$ global token from $c$\\
-  transformer, no positional encoding\\
-  $\Rightarrow$ event embedding $z$, token states $h_i$};
+% ---------------- encoder ----------------
+\node[box, draw=cenc, right=16mm of tok.east, anchor=west, yshift=14mm] (enc) {\textbf{Set encoder}\\
+  transformer, 4 layers, $d{=}128$, 4 heads, pre-LN\\
+  no positional encoding, key-padding mask\\
+  $\Rightarrow$ event embedding $z\in\mathbb{R}^{128}$ (global token)\\
+  $\Rightarrow$ token states $h_i\in\mathbb{R}^{128}$};
 
-\node[status, draw=done, below=9mm of enc.south west, anchor=north west, xshift=-4mm] (t0)
-  {\textbf{Tier 0 heads}\\
-  $p(\mathrm{reco\,exists}\mid z)$\\
-  $p(\mathrm{MINOS\,ok}\mid z)$\\
-  $p(\mathrm{charge}<0\mid z)$};
-\node[status, draw=done, below=6mm of t0.south west, anchor=north west] (t1)
-  {\textbf{Tier 1 generative} (M2, done)\\
-  conditional flow matching on 9-d\\
-  $\mu\,(p_x,p_y,p_z)$, reco vertex $(x,y,z)$,\\
-  3 calorimetric energies (+2 derived)\\
-  conditioned on $z$ and Tier 0 flags\\
-  + vertex-plane head (M3, done): unsnapped / $\delta\in[-3,3]$ / far};
-\node[status, draw=done, right=6mm of t1] (t2)
-  {\textbf{Tier 2 generative} (M3, done)\\
-  flow matching on masked $N\times 10$ prong set\\
-  per prong: has-kinematics, direction, $\pi$-hyp.\ $P$,\\
-  proton fit, $P$, score, exiting, primary flags\\
-  equivariant net, cross-attends $h_i$, cond.\ on Tier 1};
-\node[status, draw=done, above=6mm of t2.north, anchor=south] (card)
-  {\textbf{Cardinality} (M2, done)\\
-  $p(N_\mathrm{prongs}\mid z)$\\
-  categorical $0..8$};
+% ---------------- classification heads ----------------
+\node[head, draw=ccls, right=14mm of enc.east, anchor=west, yshift=16mm] (t0) {\textbf{Event classification heads} (MLP on $z$)\\
+  $p(\text{reco muon candidate}\mid z)$ \hfill Bernoulli\\
+  $p(\text{MINOS matched}\mid z)$ \hfill Bernoulli\\
+  $p(\text{charge}<0\mid z)$ \hfill Bernoulli\\
+  $p(N_\text{prongs}\mid z)$, $N\in\{0..8\}$ \hfill categorical};
+\node[head, draw=ccls, below=13mm of t0.south west, anchor=north west] (vtx) {\textbf{Vertex-plane head} (MLP)\\
+  in: $c_1$, phase of true $z$ in the 22\,mm plane cycle\\
+  out: 9 classes: unsnapped / plane $\delta\!\in\![-3,3]$ / far plane};
 
-% ---------- column 3: output ----------
-\node[status, draw=done, right=20mm of t2] (dec)
-  {\textbf{Decoder} \S13.4\\
-  beam-frame angles, on-shell $E$\\
-  primary / secondary proton rule\\
-  fill conventions ($-1$, $-9$, $-9999$)};
-\node[status, draw=done, below=of dec] (nt)
-  {\textbf{Pruned MasterAnaDev ntuple}\\
-  same branch names, types, \texttt{\_sz}\\
+% ---------------- generative heads ----------------
+\node[head, draw=cgen, below=13mm of vtx.south west, anchor=north west] (t1) {\textbf{Event flow} (conditional flow matching, 9-d)\\
+  $x_1 = $ muon $(\log P/P_\text{true},\ \Delta\theta_x,\ \Delta\theta_y)$,\\
+  \hphantom{$x_1 = $} vertex residual $(\Delta x,\Delta y,\Delta z)$,\\
+  \hphantom{$x_1 = $} $\log E$: recoil, non-vertex $100$\,mm, isolated blobs\\
+  velocity MLP 5$\times$768; cond.\ $c_1=[z,\ \text{flags},\ \text{emb}(N)]$};
+\node[head, draw=cgen, below=13mm of t1.south west, anchor=north west] (t2) {\textbf{Prong set flow} (masked flow matching, $N\times 10$)\\
+  per prong: has-kinematics, $\hat u$ (3), $\log P_\pi$, proton fit,\\
+  \hphantom{per prong:} $\log P_p$, logit score, exiting, primary\\
+  equivariant transformer, 3 layers: self-attn over prongs,\\
+  cross-attn to $h_i$; cond.\ $[c_1,\ x_1]$; flags dequantised};
+
+% ---------------- decoder / output ----------------
+\node[box, draw=cout, right=22mm of t1.east, anchor=west, yshift=-10mm] (dec) {\textbf{Decoder}\\
+  inverse transforms (asinh, log, ratio tables)\\
+  vertex $z$: snap to plane if class $>0$\\
+  prong table $\to$ pion/proton/sec-proton blocks\\
+  beam-frame angles, on-shell $E$, fill values};
+\node[box, draw=cout, below=of dec] (nt) {\textbf{Pruned MasterAnaDev ntuple}\\
+  80 branches, same names / types / \texttt{\_sz}\\
   as the open-data tuple};
 
-% ---------- training data (bottom) ----------
-\node[status, draw=done, below=26mm of t1.south west, anchor=north west, xshift=-2mm] (data)
-  {\textbf{Training pairs} (MINERvA ME FHC MC)\\
-  \texttt{Truth} tree: all events $\to$ efficiency denominator\\
-  \texttt{MasterAnaDev} tree: reco $+$ truth copy\\
-  streamed from xrootd, slimmed to Parquet ($\le 9.5$\,GB)};
-\node[status, draw=done, right=6mm of data] (base)
-  {\textbf{M1 baselines} (reference)\\
-  48 summary features $\to$ HistGBDT (Tier 0, $N$)\\
-  MDN $K{=}8$: $\mu$ response, $\log E_\mathrm{recoil}$\\
-  reference numbers in \texttt{reports/performance}};
-
-% ---------- arrows ----------
+% ---------------- arrows ----------------
 \draw[arr] (gen) -- (pipe);
 \draw[arr] (pipe) -- (tok);
-\draw[arr] (tok.east) -- ++(8mm,0) |- (enc.west);
-\draw[arr] (enc.south) -- ++(0,-4.5mm) -| (t0.north);
-\draw[arr] (enc.south) -- ++(0,-4.5mm) -| (card.north);
-\draw[arr] (t0.south) -- (t0.south |- t1.north);
-\draw[arr] (card.south) -- (t2.north);
-\draw[arrd] (t0.east) -- (t0.east -| card.west);
-\draw[arrd] (t1.east) -- (t2.west);
-\draw[arr] (t2.east) -- (dec.west);
-\draw[arr] ($(t1.north east)+(-10mm,0)$) -- ++(0,3mm) -| ($(dec.west)+(-7mm,0)$) -- (dec.west);
+\draw[arr] (tok.east) -- ++(7mm,0) |- (enc.west);
+\draw[arr] (enc.east) -- ++(6mm,0) |- (t0.west);
+\draw[arr] (enc.east) -- ++(6mm,0) |- (vtx.west);
+\draw[arr] (enc.east) -- ++(6mm,0) |- (t1.west);
+\draw[arr] (enc.east) -- ++(6mm,0) |- (t2.west);
+\draw[arrc] (enc.south) -- ++(0,-4mm) -| ($(t2.west)+(-3mm,0)$) node[dim, pos=0.3, below] {$h_i$} -- (t2.west);
+% conditioning on sampled quantities (dashed, inside the head column)
+\draw[arrd] ($(t0.south)+(-30mm,0)$) -- ($(t0.south)+(-30mm,0)$ |- vtx.north) node[dim, pos=0.5, left, yshift=-0.8mm] {flags, $N$};
+\draw[arrd] ($(vtx.south)+(-30mm,0)$) -- ($(vtx.south)+(-30mm,0)$ |- t1.north) node[dim, pos=0.5, left, yshift=-0.8mm] {flags, $N$};
+\draw[arrd] ($(t1.south)+(-30mm,0)$) -- ($(t1.south)+(-30mm,0)$ |- t2.north) node[dim, pos=0.5, left, yshift=-0.8mm] {flags, $N$, $x_1$};
+% outputs collected on a bus to the decoder
+\coordinate (bus) at ($(t0.east)+(9mm,0)$);
+\foreach \h in {t0,vtx,t1,t2} { \draw[line width=0.7pt, draw=ink] (\h.east) -- (\h.east -| bus); }
+\draw[line width=0.7pt, draw=ink] (t0.east -| bus) -- (t2.east -| bus);
+\draw[arr] (dec.west -| bus) -- (dec.west);
 \draw[arr] (dec) -- (nt);
-\draw[arrd] (data.north) -- ++(0,6mm) -| ($(t1.south)+(-8mm,0)$);
-\draw[arrd] (base.north) -- ++(0,6mm) -| ($(t2.south)+(8mm,0)$);
 
-% ---------- stage labels ----------
-\node[stage, above=2mm of gen.north west] {TRUTH SIDE};
-\node[stage, above=2mm of enc.north west] {SURROGATE $p(R \mid X, c)$};
-\node[stage, above=9mm of dec.north west] {RECO SIDE};
+% ---------------- stage labels ----------------
+\node[stage, above=2mm of gen.north west] {INPUT (generator-agnostic)};
+\node[stage, above=2mm of enc.north west] {ENCODER};
+\node[stage, above=2mm of t0.north west] {HEADS: sampled in this order $\downarrow$};
+\node[stage, above=2mm of dec.north west, xshift=0mm] {OUTPUT};
 
-% ---------- legend ----------
-\node[note, below=4mm of data.south west, anchor=north west] (leg) {
-  \tikz\draw[done, line width=1.4pt] (0,0) rectangle (3mm,3mm); done\quad
-  \tikz\draw[wip, line width=1.4pt] (0,0) rectangle (3mm,3mm); in progress\quad
-  \tikz\draw[plan, line width=1.4pt] (0,0) rectangle (3mm,3mm); planned\quad
-  dashed $=$ conditioning / training signal\qquad
-  \S\,refs: \texttt{docs/PROJECT.md}\quad updated 2026-09-24};
+% ---------------- legend ----------------
+\node[dim, below=6mm of t2.south west, anchor=north west, align=left] {
+  solid $=$ data flow;\quad dashed $=$ conditioning on sampled quantities;\quad dotted $=$ cross-attention to token states.\\
+  Sampling order: classification heads $\to$ vertex class $\to$ event flow $\to$ prong set flow $\to$ decoder.
+  Training: joint, all losses, warm start of the prong flow from the event-level model.};
 
 \end{tikzpicture}
 \end{document}
