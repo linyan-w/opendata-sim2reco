@@ -19,12 +19,21 @@ def test_tier1_transform_round_trip():
     rng = np.random.default_rng(0)
     y, mu, ctx = _fake_raw(5000, rng)
     tf = Tier1Transform().fit(y, mu, ctx)
-    x = tf.forward(y, mu, ctx, rng)
-    assert np.isfinite(x).all() and np.abs(x).max() <= tf.clip
+    x, valid = tf.forward(y, mu, ctx, rng)
+    assert valid.all() and np.isfinite(x).all() and np.abs(x).max() <= tf.clip
     yb = tf.inverse(x, mu, ctx)
     assert np.allclose(yb[:, :6], y[:, :6], rtol=1e-4, atol=1e-2)
     assert np.allclose(yb[:, 6:], y[:, 6:], rtol=1e-3, atol=1e-2)   # zeros come back as exact zeros
     assert ((y[:, 10] == 0) == (yb[:, 10] == 0)).all()
+
+
+def test_transform_flags_corrupt_rows():
+    rng = np.random.default_rng(1)
+    y, mu, ctx = _fake_raw(200, rng)
+    tf = Tier1Transform().fit(y, mu, ctx)
+    y[3, 0] = np.nan; y[7, 4] = np.inf
+    x, valid = tf.forward(y, mu, ctx, rng)
+    assert (~valid).sum() == 2 and np.isfinite(x).all()
 
 
 def test_surrogate_forward_and_sample():
@@ -35,7 +44,7 @@ def test_surrogate_forward_and_sample():
         k = 1 + i
         items.append((np.random.randint(1, 12, k).astype(np.int8), np.random.randn(k, 3).astype(np.float32) * 500,
                       np.array([0, 0, 6000, 6, 12], np.float32), np.array([1, 1, 1], np.float32), np.int8(i % 3),
-                      np.random.randn(11).astype(np.float32), np.array([0, 0, 4000], np.float32)))
+                      np.random.randn(11).astype(np.float32), np.array([0, 0, 4000], np.float32), np.float32(1.0)))
     b = collate(items)
     m = Surrogate(d_model=32, n_heads=4, n_layers=1, flow_hidden=64, flow_layers=2)
     L = m.losses(b)

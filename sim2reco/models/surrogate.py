@@ -37,8 +37,9 @@ class Surrogate(nn.Module):
         l_minos = F.binary_cross_entropy_with_logits(logits[reco, 1], t0[reco, 1]) if reco.any() else logits.sum() * 0
         l_charge = F.binary_cross_entropy_with_logits(logits[minos, 2], t0[minos, 2]) if minos.any() else logits.sum() * 0
         l_card = F.cross_entropy(self.card(z[reco]), b["nprong"][reco]) if reco.any() else logits.sum() * 0
-        cond = self.flow_cond(z[reco], t0[reco, 1:3], b["nprong"][reco])
-        l_flow = self.flow.loss(b["x1"][reco], cond).mean() if reco.any() else logits.sum() * 0
+        fl = reco & (b["valid"] > 0)   # exclude the rare corrupt tuple entries from the flow loss
+        cond = self.flow_cond(z[fl], t0[fl, 1:3], b["nprong"][fl])
+        l_flow = self.flow.loss(b["x1"][fl], cond).mean() if fl.any() else logits.sum() * 0
         return {"exist": l_exist, "minos": l_minos, "charge": l_charge, "card": l_card, "flow": l_flow}
 
     @torch.no_grad()

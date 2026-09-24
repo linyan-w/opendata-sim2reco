@@ -73,12 +73,26 @@ def train(stems, out_dir, epochs=20, bs=1024, lr=3e-4, seed=0, device="cuda", d_
                 for k, v in L.items(): va[k] = va.get(k, 0) + v.item() / len(ld["val"])
         rec = {"epoch": ep, "train": {k: v / len(ld["train"]) for k, v in agg.items()}, "val": va, "time": time.time() - t0}
         hist.append(rec); tot = sum(va.values())
+        if not np.isfinite(tot):
+            print("  WARNING: non-finite validation loss", flush=True)
         print(f"epoch {ep}: val " + " ".join(f"{k} {v:.4f}" for k, v in va.items()) + f"  total {tot:.4f}  [{rec['time']:.0f} s]", flush=True)
-        if tot < best:
+        if np.isfinite(tot) and tot < best:
             best = tot
             torch.save({"model": model.state_dict(), "transform": tf.state(), "config": {"d_model": d_model, "n_layers": n_layers, "flow_hidden": flow_hidden, "flow_layers": flow_layers}}, out / "model.pt")
     (out / "history.json").write_text(json.dumps(hist, indent=1))
     return d, split, tf, idx, ld, out
+
+
+def write_data_table(stems, d, split, out_dir, epochs=None, n_params=None):
+    """One-line data summary for the report (reports/m2/tables/data.tex)."""
+    f = lambda n: f"{int(n):,}".replace(",", "{,}")
+    n = len(split); tr, va, te = [(split == k).sum() for k in (0, 1, 2)]
+    reco = d["reco_exists"].mean()
+    txt = (f"{len(stems)} ME FHC MC files, {f(n)} CC~$\\nu_\\mu$ events with $z \\ge 4000$~mm ({reco*100:.1f}\\% reconstructed), "
+           f"{f(d['offsets'][-1])} particle tokens; subrun split {f(tr)} / {f(va)} / {f(te)} train / validation / test"
+           + (f"; {epochs} epochs" if epochs else "") + (f"; {n_params/1e6:.2f}\\,M parameters" if n_params else "") + ".")
+    pathlib.Path(out_dir, "tables").mkdir(parents=True, exist_ok=True)
+    (pathlib.Path(out_dir) / "tables" / "data.tex").write_text(txt + "\n")
 
 
 def load_model(path, device="cuda"):
@@ -112,14 +126,17 @@ def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64
     M["multiplicity"]["marginal_true"] = np.bincount(yn[reco], minlength=9).tolist()
     M["multiplicity"]["marginal_sampled"] = np.bincount(np.minimum(samp_n, 8), minlength=9).tolist()
     # Tier 1: compare on reconstructed test events, teacher-forcing nothing (flags and N are the sampled ones)
-    x_real = tf.forward(d["tier1"][idx_test[reco]], d["mu_true"][idx_test[reco]], d["ctx"][idx_test[reco]], np.random.default_rng(seed))
+    x_real, valid = tf.forward(d["tier1"][idx_test[reco]], d["mu_true"][idx_test[reco]], d["ctx"][idx_test[reco]], np.random.default_rng(seed))
     x_fake = S[reco, 4:]
-    y_real = d["tier1"][idx_test[reco]]
-    y_fake = tf.inverse(x_fake, d["mu_true"][idx_test[reco]], d["ctx"][idx_test[reco]])
-    names_model = ["log_P_ratio", "dslope_x", "dslope_y", "dvtx_x", "dvtx_y", "dvtx_z"] + [f"log_{n}" for n in TIER1_NAMES[6:]]
+    x_real, x_fake = x_real[valid], x_fake[valid]
+    y_real = d["tier1"][idx_test[reco]][valid]
+    y_fake = tf.inverse(x_fake, d["mu_true"][idx_test[reco]][valid], d["ctx"][idx_test[reco]][valid])
+    M["n_invalid_tuple_rows"] = int((~valid).sum())
+    names_model = ["log_P_ratio", "dtheta_x", "dtheta_y", "dvtx_x", "dvtx_y", "dvtx_z", "log_recoil_E",
+                   "log_ratio_passivecorr", "log_ratio_hadron_recoil", "log_recoil_nonvtx100", "log_nonvtx_iso_blobs_E"]
     M["tier1_model_space"] = {n: sample_vs_real_1d(x_real[:, j], x_fake[:, j]) for j, n in enumerate(names_model)}
     M["tier1_raw"] = {n: sample_vs_real_1d(y_real[:, j], y_fake[:, j]) for j, n in enumerate(TIER1_NAMES)}
-    mm = t0[reco, 1] > 0; sm = S[reco, 1] > 0
+    mm = (t0[reco, 1] > 0)[valid]; sm = (S[reco, 1] > 0)[valid]
     M["tier1_model_space"]["log_P_ratio_minos_ok"] = sample_vs_real_1d(x_real[mm, 0], x_fake[sm, 0])
     M["tier1_model_space"]["log_P_ratio_no_minos"] = sample_vs_real_1d(x_real[~mm, 0], x_fake[~sm, 0])
     # correlations
@@ -127,10 +144,11 @@ def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64
     M["corr_max_abs_diff"] = float(np.abs(np.array(M["corr_real"]) - np.array(M["corr_fake"])).max())
 
     # classifier test on reconstructed events: (truth summary features, reco vector) real vs fake
-    cls_p, mom_p, mask_p = _pad(d, idx_test[reco])
-    X, _ = event_features(cls_p, mom_p, mask_p, d["ctx"][idx_test[reco]])
-    Xr = np.concatenate([X, t0[reco, 1:3], yn[reco][:, None], x_real], 1)
-    Xf = np.concatenate([X, S[reco, 1:3], S[reco, 3:4], x_fake], 1)
+    rv = idx_test[reco][valid]
+    cls_p, mom_p, mask_p = _pad(d, rv)
+    X, _ = event_features(cls_p, mom_p, mask_p, d["ctx"][rv])
+    Xr = np.concatenate([X, t0[reco][valid, 1:3], yn[reco][valid][:, None], x_real], 1)
+    Xf = np.concatenate([X, S[reco][valid, 1:3], S[reco][valid, 3:4], x_fake], 1)
     Xc = np.concatenate([Xr, Xf]); yc = np.concatenate([np.ones(len(Xr)), np.zeros(len(Xf))])
     rng = np.random.default_rng(seed); perm = rng.permutation(len(Xc)); half = len(perm) // 2
     clf = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.05, max_leaf_nodes=31, early_stopping=True, random_state=seed)
@@ -140,9 +158,17 @@ def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64
     Xc2 = np.concatenate([x_real, x_fake]); clf2.fit(Xc2[perm[:half]], yc[perm[:half]])
     auc2 = roc_auc_score(yc[perm[half:]], clf2.predict_proba(Xc2[perm[half:]])[:, 1])
     M["classifier_auc_conditional"] = float(auc); M["classifier_auc_marginal"] = float(auc2)
+    # which variables carry the discrimination: single columns and blocks (reco vector only, subsample)
+    sub = perm[:min(len(perm), 400_000)]; half2 = len(sub) // 2
+
+    def _auc(cols):
+        c = HistGradientBoostingClassifier(max_iter=150, learning_rate=0.1, early_stopping=True, random_state=seed)
+        c.fit(Xc2[sub[:half2]][:, cols], yc[sub[:half2]]); return float(roc_auc_score(yc[sub[half2:]], c.predict_proba(Xc2[sub[half2:]][:, cols])[:, 1]))
+    M["classifier_auc_by_variable"] = {n: _auc([j]) for j, n in enumerate(names_model)}
+    M["classifier_auc_by_block"] = {"muon": _auc([0, 1, 2]), "vertex": _auc([3, 4, 5]), "calorimetry": _auc([6, 7, 8, 9, 10])}
 
     # conditional checks: muon response vs true P, recoil vs sum KE
-    names = event_features(cls_p[:1], mom_p[:1], mask_p[:1], d["ctx"][idx_test[reco][:1]])[1]
+    names = event_features(cls_p[:1], mom_p[:1], mask_p[:1], d["ctx"][rv[:1]])[1]
     muP = X[:, names.index("mu_P")] / 1000; ke = X[:, names.index("sumKE_had")]
     M["muon_resp_by_P"] = _by_bin(muP, x_real[:, 0], x_fake[:, 0], np.array([0, 1, 1.5, 2, 3, 4, 6, 8, 12, 20, 40]))
     M["recoil_by_sumKE"] = _by_bin(ke, x_real[:, 6], x_fake[:, 6], np.array([0, 100, 200, 400, 800, 1500, 3000, 6000, 20000]))
@@ -185,13 +211,13 @@ def _by_bin(x, real, fake, edges):
 
 def _figures(M, xr, xf, yr, yf, mm, sm, fdir):
     fig, axs = plots.plt.subplots(1, 3, figsize=(11, 3.2))
-    plots.hist_compare(axs[0], xr[mm, 0], xf[sm, 0], np.linspace(-6, 6, 80), "log(P_reco/P_true) [robust sigma], MINOS matched", ("MasterAnaDev", "surrogate"))
-    plots.hist_compare(axs[1], xr[~mm, 0], xf[~sm, 0], np.linspace(-12, 12, 80), "log(P_reco/P_true) [robust sigma], not matched", ("MasterAnaDev", "surrogate")); axs[1].set_yscale("log")
-    plots.hist_compare(axs[2], xr[:, 1], xf[:, 1], np.linspace(-8, 8, 80), "dslope_x [robust sigma]", ("MasterAnaDev", "surrogate")); axs[2].set_yscale("log")
+    plots.hist_compare(axs[0], xr[mm, 0], xf[sm, 0], np.linspace(-5, 5, 80), "log(P_reco/P_true) [model space], MINOS matched", ("MasterAnaDev", "surrogate"))
+    plots.hist_compare(axs[1], xr[~mm, 0], xf[~sm, 0], np.linspace(-8, 8, 80), "log(P_reco/P_true) [model space], not matched", ("MasterAnaDev", "surrogate")); axs[1].set_yscale("log")
+    plots.hist_compare(axs[2], xr[:, 1], xf[:, 1], np.linspace(-8, 8, 80), "dtheta_x [model space]", ("MasterAnaDev", "surrogate")); axs[2].set_yscale("log")
     plots.save(fig, fdir / "m2_muon.png")
     fig, axs = plots.plt.subplots(1, 3, figsize=(11, 3.2))
     for j, (ax, nm) in enumerate(zip(axs, ["dvtx_x", "dvtx_y", "dvtx_z"])):
-        plots.hist_compare(ax, xr[:, 3 + j], xf[:, 3 + j], np.linspace(-12, 12, 80), f"{nm} [robust sigma]", ("MasterAnaDev", "surrogate")); ax.set_yscale("log")
+        plots.hist_compare(ax, xr[:, 3 + j], xf[:, 3 + j], np.linspace(-8, 8, 80), f"{nm} [model space]", ("MasterAnaDev", "surrogate")); ax.set_yscale("log")
     plots.save(fig, fdir / "m2_vertex.png")
     fig, axs = plots.plt.subplots(1, 5, figsize=(16, 3.0))
     for j, (ax, nm) in enumerate(zip(axs, TIER1_NAMES[6:])):
@@ -212,7 +238,7 @@ def _figures(M, xr, xf, yr, yf, mm, sm, fdir):
         for k, (key, c, lab, ls) in enumerate((("real_q16_50_84", plots.PALETTE["real"], "MasterAnaDev", "o-"), ("fake_q16_50_84", plots.PALETTE["model"], "surrogate", "s--"))):
             ax.plot(x, [r[key][1] for r in rows], ls, color=c, ms=4, label=lab); ax.fill_between(x, [r[key][0] for r in rows], [r[key][2] for r in rows], color=c, alpha=0.15)
         ax.set_xscale("log"); ax.set_xlabel(xl); ax.legend(frameon=False)
-    axs[0].set_ylabel("log P ratio [robust sigma]"); axs[1].set_ylabel("log recoil_E [robust sigma]")
+    axs[0].set_ylabel("log P ratio [model space]"); axs[1].set_ylabel("log recoil_E [model space]")
     plots.save(fig, fdir / "m2_conditionals.png")
 
 
@@ -230,7 +256,11 @@ def _tables(M, m1, tdir):
     for n, v in M["tier1_model_space"].items():
         r, f = v["real_q16_50_84"], v["fake_q16_50_84"]
         rows.append(f"{n.replace('_', chr(92)+'_')} & {r[1]:.3f} [{r[0]:.3f}, {r[2]:.3f}] & {f[1]:.3f} [{f[0]:.3f}, {f[2]:.3f}] & {v['w1']:.4f} \\\\")
-    (tdir / "tier1_marginals.tex").write_text("\\begin{tabular}{lccc}\n\\toprule\nVariable (model space, robust $\\sigma$ units) & MasterAnaDev median [16\\%, 84\\%] & surrogate median [16\\%, 84\\%] & $W_1$ \\\\\n\\midrule\n" + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n")
+    (tdir / "tier1_marginals.tex").write_text("\\begin{tabular}{lccc}\n\\toprule\nVariable (model space) & MasterAnaDev median [16\\%, 84\\%] & surrogate median [16\\%, 84\\%] & $W_1$ \\\\\n\\midrule\n" + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n")
+    blk = M.get("classifier_auc_by_block", {}); byv = M.get("classifier_auc_by_variable", {})
+    blk_rows = "".join(f"block: {k} only & {v:.3f} \\\\\n" for k, v in blk.items())
+    var_rows = "".join(f"single variable: {k.replace('_', chr(92)+'_')} & {v:.3f} \\\\\n" for k, v in byv.items())
     (tdir / "closure.tex").write_text("\\begin{tabular}{lc}\n\\toprule\nTest & AUC \\\\\n\\midrule\n"
         f"real vs surrogate, reco vector only & {M['classifier_auc_marginal']:.3f} \\\\\nreal vs surrogate, (truth features, reco vector) & {M['classifier_auc_conditional']:.3f} \\\\\n"
+        + "\\midrule\n" + blk_rows + var_rows
         f"\\midrule\nmax $|\\Delta$corr$|$ over the 11 Tier 1 variables & {M['corr_max_abs_diff']:.3f} \\\\\n" + "\\bottomrule\n\\end{tabular}\n")
