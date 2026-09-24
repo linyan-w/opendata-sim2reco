@@ -1,0 +1,44 @@
+\subsection{How the closure test drove the M2 iterations}
+\label{sec:m2-iter}
+
+The closure classifier turned out to be the most useful diagnostic of the project so far: each of its
+failures pointed at a specific defect in how the reco variables were presented to the flow, not at the
+network. Table~\ref{tab:m2-iter} lists the iterations, all trained on the same 32 files with the same encoder.
+
+\begin{table}[h]\centering\small
+\resizebox{\textwidth}{!}{\input{m2_iterations.tex}}
+\caption{M2 iterations. $W_1$ values are in the model space of each iteration and are therefore only roughly
+comparable across rows; the classifier AUCs are directly comparable.}
+\label{tab:m2-iter}
+\end{table}
+
+\paragraph{v1: clipping created spikes.} The first version standardised each variable by a robust width and
+clipped at $\pm 12\sigma$. The robust width of the muon variables is set by the narrow MINOS-matched core,
+so the broad unmatched-muon population landed on the clip boundaries: 9\% of momentum ratios, 17\% of angle
+differences and 5--9\% of vertex residuals were clipped, and among unmatched muons 76\% of the angle
+differences. The flow was asked to reproduce artificial delta functions at the edges and could not.
+The same run also exposed eight reconstructed events (of 4.8 million) whose tuple entries contain NaN or
+infinite muon momenta and vertices; one such event per batch made the loss NaN, which silently prevented any
+checkpoint from being saved in the very first attempt. These rows are now flagged and excluded from the flow
+loss.
+
+\paragraph{v2: asinh compression.} Replacing the clip by $\mathrm{asinh}(u/s_0)$ on the muon and vertex
+columns made the tails logarithmic, removed all clipping and brought the AUC from 0.86 to 0.77. Per-variable
+classifiers then showed every single marginal at AUC $\le 0.56$, but the calorimetry block alone at 0.80:
+the discrimination came from \emph{pairs} of variables, specifically \texttt{recoil\_passivecorrected} versus
+\texttt{recoil\_E} and \texttt{hadron\_recoil} versus \texttt{recoil\_E}.
+
+\paragraph{v3: log-ratios, and a point mass.} Modelling those two as log-ratios to \texttt{recoil\_E} made
+the problem worse (AUC 0.97, the passive-correction ratio alone 0.89), which revealed the actual structure:
+the ratios are not smooth. The passive-corrected recoil equals $0.6669 \times$\texttt{recoil\_E} exactly for
+more than 15\% of events (its 84th and 99th percentiles coincide) and takes a geometry-dependent value between
+0.62 and 0.67 otherwise; \texttt{hadron\_recoil} equals $1.385 \times$\texttt{recoil\_E} to within a MeV for a
+large fraction of events. These are deterministic MasterAnaDev calibrations of one number, not independent
+detector responses, and a continuous flow cannot produce a delta function.
+
+\paragraph{v4: derive, do not generate.} The two calibrated variants are removed from the generative target
+and filled at decode time as \texttt{recoil\_E} times the median ratio in 250\,mm bins of true vertex $z$,
+fitted on the training split. The approximation drops the event-by-event scatter of the calibration
+(16--84\% widths of about 3\% and 10\% respectively) and is documented as such; an analysis that depends on
+that scatter should use \texttt{recoil\_E} directly. The flow now generates 9 variables and was given more
+capacity (5 layers of 768 units).

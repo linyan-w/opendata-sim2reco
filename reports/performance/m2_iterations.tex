@@ -1,0 +1,10 @@
+\begin{tabular}{lcccccc}
+\toprule
+Iteration & AUC (reco only) & AUC (truth+reco) & $W_1$ $\log P$ ratio & $W_1$ $\Delta\theta_x$ & $W_1$ $\Delta$vtx$_z$ & $W_1$ $\log E_\mathrm{recoil}$ \\
+\midrule
+v1: robust standardisation, clip $\pm 12\sigma$, 11 variables & 0.862 & 0.887 & 1.581 & nan & 0.413 & 0.048 \\
+v2: + asinh tail compression, angle differences & 0.766 & 0.845 & 0.326 & 0.382 & 0.155 & 0.085 \\
+v3: + calorimetric variants as log-ratios & 0.970 & 0.974 & 0.347 & 0.413 & 0.163 & 0.101 \\
+v4: 9 generated + 2 derived, larger flow & \multicolumn{6}{c}{see Tables~\ref{tab:m2-tier1}, \ref{tab:m2-closure}} \\
+\bottomrule
+\end{tabular}

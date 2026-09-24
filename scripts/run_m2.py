@@ -11,6 +11,7 @@ if __name__ == "__main__":
     ap.add_argument("--epochs", type=int, default=20); ap.add_argument("--bs", type=int, default=1024); ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--max-train", type=int, default=None); ap.add_argument("--eval-only", action="store_true"); ap.add_argument("--m1", default="reports/m1/metrics.json")
     ap.add_argument("--d-model", type=int, default=128); ap.add_argument("--n-layers", type=int, default=4); ap.add_argument("--n-files", type=int, default=None)
+    ap.add_argument("--flow-hidden", type=int, default=768); ap.add_argument("--flow-layers", type=int, default=5); ap.add_argument("--steps", type=int, default=100)
     a = ap.parse_args()
     from sim2reco.train.m2 import train, evaluate, load_model, make_loaders, write_data_table
     from sim2reco.data.compact import load_compact, Tier1Transform
@@ -23,11 +24,11 @@ if __name__ == "__main__":
         model, tf = load_model(pathlib.Path(a.out_dir) / "model.pt")
         idx, ds, ld = make_loaders(d, split, tf, a.bs, 0)
     else:
-        d, split, tf, idx, ld, out = train(stems, a.out_dir, a.epochs, a.bs, a.lr, 0, "cuda", a.d_model, a.n_layers, max_train_events=a.max_train)
+        d, split, tf, idx, ld, out = train(stems, a.out_dir, a.epochs, a.bs, a.lr, 0, "cuda", a.d_model, a.n_layers, a.flow_hidden, a.flow_layers, max_train_events=a.max_train)
         model, tf = load_model(pathlib.Path(a.out_dir) / "model.pt")
     m1 = json.load(open(a.m1)) if pathlib.Path(a.m1).exists() else None
     write_data_table(stems, d, split, a.out_dir, None if a.eval_only else a.epochs, sum(p.numel() for p in model.parameters()))
-    M = evaluate(model, tf, d, idx["test"], ld["test"], a.out_dir, m1_metrics=m1)
+    M = evaluate(model, tf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps, m1_metrics=m1)
     print(json.dumps({"tier0": {k: round(v["logloss"], 4) for k, v in M["tier0"].items()}, "mult_logloss": round(M["multiplicity"]["logloss"], 4),
                       "auc_marginal": round(M["classifier_auc_marginal"], 4), "auc_conditional": round(M["classifier_auc_conditional"], 4),
                       "w1": {k: round(v["w1"], 4) for k, v in M["tier1_model_space"].items()}}, indent=1))

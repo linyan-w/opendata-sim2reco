@@ -346,7 +346,7 @@ new generator the vertex and target are supplied by the user or sampled from the
 | Tier 0 | `reco_exists` (muon candidate found), `minos_ok` (muon matched to a good MINOS track), `mu_charge_neg` (reconstructed muon charge sign, defined only when `minos_ok`) | binary |
 | Muon | `mu_px, mu_py, mu_pz` | continuous (3) |
 | Vertex | `rvtx_x, rvtx_y, rvtx_z` | continuous (3) |
-| Calorimetry | `recoil_E`, `recoil_passivecorrected`, `hadron_recoil`, `recoil_nonmuon_nonvtx100mm`, `nonvtx_iso_blobs_energy` | continuous (5) |
+| Calorimetry | `recoil_E`, `recoil_nonmuon_nonvtx100mm`, `nonvtx_iso_blobs_energy` | continuous (3). `recoil_passivecorrected` and `hadron_recoil` turned out to be deterministic MasterAnaDev calibrations of `recoil_E` (point masses at ratio 0.6669 and 1.385, geometry dependent) and are **derived** at decode time as `recoil_E` times the median ratio in bins of vertex z (M2 finding, 2026-09-23). |
 | Counts | `n_prongs` (hadron prongs, 0..8), `n_nonvtx_iso_blobs` (0..~40) | categorical |
 | Prongs, per prong `i < n_prongs` | `pi_px, pi_py, pi_pz` (pion-hypothesis momentum), `has_proton_fit`, `p_P` (proton-hypothesis momentum magnitude), `proton_score1`, `is_exiting` | 3 continuous, 1 binary, 2 continuous, 1 binary |
 

@@ -9,7 +9,7 @@ from .encoder import SetEncoder
 from .flow import FlowMatcher
 
 N_PRONG_CLASSES = 9  # 0..8
-TIER1_DIM = 11
+TIER1_DIM = 9  # MODEL_COLS of sim2reco.data.compact
 
 
 class Surrogate(nn.Module):
