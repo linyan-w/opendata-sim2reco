@@ -292,7 +292,7 @@ directly useful for validation. Start with flow matching for both tiers to keep 
 |---|---|---|
 | M0 ✅ | Slimming (local or streamed from xrootd), Parquet dataset, prong table round trip, tests | Done 2026-09-23: 300 MB Parquet per 20 GB file, loads in 2 s, exact round trip |
 | M1 ✅ | Baselines: GBDT efficiency / MINOS / charge / multiplicity, MDN muon response + recoil | Done 2026-09-23: `reports/m1/`, `reports/performance/main.tex` |
-| M2 | Tier 0 + Tier 1 conditional flow-matching model, random split | Closure: real-vs-surrogate classifier AUC < 0.55 on held-out events |
+| M2 ✅ | Set encoder + Tier 0/cardinality heads + 9-d flow matching, 32 files, subrun split | Done 2026-09-23: heads beat M1 on all targets; closure AUC 0.57 marginal / 0.62 conditional (vertex-z plane snapping is the residual). `scripts/surrogate_to_ntuple.py` writes the pruned ntuple. |
 | M3 | Physics-holdout extrapolation study (§7), ensemble OOD score | Written report of where it works and where it does not |
 | M4 | Tier 2 prong set model (cardinality + set flow matching) | Reproduces multiplicity confusion and prong kinematics |
 | M5 | First application: alternative-generator truth → surrogate reco → comparison to open data | Paper-quality reco-level comparison |
@@ -433,3 +433,19 @@ Branches that are constant or unfilled in this sample (`blob_ccqe_recoil_E`, `EM
    above 3971 mm; the nuclear-target region begins near 4300 mm). All target-Z values are kept. Gives
    368k events from the example file with 39.6% reconstructed (`docs/tuple_notes.md`).
 10. `n_nonvtx_iso_blobs` and `nonvtx_iso_blobs_energy` wait for M4 (decided 2026-09-23).
+
+## 15. M2 findings (2026-09-23)
+
+- **Heads.** Test log loss reconstructed 0.364 (M1 tree 0.423), MINOS match 0.060 (0.102), charge 0.119 (0.127),
+  prong multiplicity 0.803 (0.843). The particle set beats 48 summary features everywhere.
+- **Flow.** Nine generated variables (muon pxyz as response, vertex residual, three calorimetric energies); marginals
+  close to $W_1 \le 0.06$ in model units, correlations to 0.04. Closure classifier AUC 0.57 (reco vector) and 0.62
+  (truth + reco). Residual: the reco vertex z snaps to plane positions for ~1/3 of events (comb-like residual given
+  truth); fix = discrete plane head + offset, scheduled with Tier 2.
+- **Derived, not generated:** `recoil_passivecorrected` and `hadron_recoil` are MasterAnaDev calibrations of
+  `recoil_E` with point masses at ratios 0.6669 and 1.385; filled at decode from a z-binned median ratio table.
+- **Data hygiene found by the closure test:** 8 reco rows with NaN/inf muon or vertex, one vertex of 1e14 mm,
+  the `muon_qp = -9999.9` sentinel for unmatched muons, the `P = 1, E = 0` direction-only prong sentinel. All handled
+  in `sim2reco/data/compact.py` and documented in `docs/tuple_notes.md`.
+- **Method.** Block-wise and truth-conditional closure classifiers were decisive; marginal histograms hid every defect.
+  Full record of the four iterations in `reports/performance/discussion_m2_iterations.tex`.

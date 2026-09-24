@@ -45,13 +45,15 @@ class FlowMatcher(nn.Module):
         return ((self.v(xt, t, cond) - target) ** 2).mean(-1)
 
     @torch.no_grad()
-    def sample(self, cond, n_steps=64):
-        """Midpoint (RK2) integration from t=0 to 1."""
+    def sample(self, cond, n_steps=64, bound=20.0):
+        """Midpoint (RK2) integration from t=0 to 1. The state is clamped to +-bound after each step: in
+        ~3e-5 of events the learned velocity diverges late in the trajectory (|x| -> 1e36), which would
+        otherwise yield NaN rows."""
         x = torch.randn(len(cond), self.dim, device=cond.device)
         dt = 1.0 / n_steps
         for i in range(n_steps):
             t = torch.full((len(cond),), i * dt, device=cond.device)
             k1 = self.v(x, t, cond)
             k2 = self.v(x + 0.5 * dt * k1, t + 0.5 * dt, cond)
-            x = x + dt * k2
-        return x
+            x = (x + dt * k2).clamp(-bound, bound)
+        return torch.nan_to_num(x, nan=0.0, posinf=bound, neginf=-bound)

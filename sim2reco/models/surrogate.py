@@ -52,8 +52,12 @@ class Surrogate(nn.Module):
         """Sample Tier 0 flags, N prongs and Tier 1 (model space). Optionally condition on given flags/N."""
         p0, pn, z = self.predict_probs(b)
         u = torch.rand_like(p0)
+        # The heads are conditional probabilities: p(reco exists | X), p(MINOS ok | reco), p(charge<0 | MINOS ok).
+        # `exist` is a mask for the caller; minos/charge and the Tier 1 vector describe the event *if* it is
+        # reconstructed and must not be zeroed by a False `exist` (that biased the closure test toward the
+        # unmatched-muon mode).
         exist = u[:, 0] < p0[:, 0]
-        minos = exist & (u[:, 1] < p0[:, 1])
+        minos = u[:, 1] < p0[:, 1]
         charge = minos & (u[:, 2] < p0[:, 2])
         flags = torch.stack([minos, charge], -1).float() if teacher_flags is None else teacher_flags
         nprong = torch.multinomial(pn, 1)[:, 0] if teacher_nprong is None else teacher_nprong

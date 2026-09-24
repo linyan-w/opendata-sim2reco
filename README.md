@@ -5,7 +5,7 @@ reconstructed variables, trained on the [MINERvA open data](https://minerva.fnal
 extrapolate to final states the released MC does not cover (alternative generators, higher multiplicity, new
 kinematic regions).
 
-Status: M0 (data pipeline) and M1 (baselines) done; M2 (flow-matching model) next. Read [`docs/PROJECT.md`](docs/PROJECT.md) first; performance numbers are in `reports/performance/` (LaTeX, compiled with tectonic).
+Status: M0 (data pipeline), M1 (baselines) and M2 (set encoder + flow-matching surrogate, closure AUC 0.57) done; M3 extrapolation study and M4 prong model next. Read [`docs/PROJECT.md`](docs/PROJECT.md) first; performance numbers are in `reports/performance/` (LaTeX, compiled with tectonic).
 
 ## Model schematic
 
@@ -23,6 +23,8 @@ python scripts/slim_remote.py configs/MediumEnergy_FHC_StandardMC_Playlist1M.txt
 python scripts/slim.py data/slim some_local_file.root      # same for a local ROOT file
 python scripts/dataset_summary.py data/slim/MasterAnaDev_mc_AnaTuple_run00113069_Playlist
 python scripts/run_m1.py data/slim/MasterAnaDev_mc_AnaTuple_run00113069_Playlist reports/m1   # baselines, ~1 min on a GPU
+python scripts/run_m2.py reports/m2 --epochs 30                                         # surrogate, ~2 h on an RTX 3090, all files in data/slim
+python scripts/surrogate_to_ntuple.py reports/m2 data/slim/<stem>.truth.parquet out.root  # truth -> pruned MasterAnaDev ntuple
 pytest -q                                                  # round-trip tests (ROOT file or its slimmed Parquet)
 (cd reports/performance && tectonic -X compile main.tex)   # performance report PDF
 ```
@@ -32,7 +34,8 @@ pytest -q                                                  # round-trip tests (R
 - `sim2reco/io/` — branch lists, ROOT -> Parquet slimming, pruned-ntuple writer.
 - `sim2reco/prep/` — input pipeline (particle selection, context), canonical prong table encode/decode, muon decode, beam/detector frames.
 - `sim2reco/data/` — torch dataset (padded particle sets, context, Tier 0/1 targets) and subrun-level splits.
-- `sim2reco/models/` — MDN baseline (flow matching to come); `sim2reco/train/baselines.py` — M1; `sim2reco/eval/` — metrics and plots.
+- `sim2reco/models/` — set encoder, flow matching, surrogate (M2), MDN baseline (M1); `sim2reco/train/` — `baselines.py` (M1), `m2.py` (training + closure evaluation); `sim2reco/eval/` — metrics and plots.
+- `sim2reco/data/compact.py` — ragged multi-file dataset and the Tier 1 transform (model space <-> tuple units).
 - `reports/m1/` — M1 metrics, LaTeX tables, figures; `reports/performance/main.tex` — the performance report.
 - `configs/data.yaml` — selection and split settings.
 - `tests/` — pipeline and exact round-trip tests on the example ntuple.

@@ -128,6 +128,9 @@ def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64
     # Tier 1: compare on reconstructed test events, teacher-forcing nothing (flags and N are the sampled ones)
     x_real, valid = tf.forward(d["tier1"][idx_test[reco]], d["mu_true"][idx_test[reco]], d["ctx"][idx_test[reco]], np.random.default_rng(seed))
     x_fake = S[reco, 4:]
+    finite_fake = np.isfinite(x_fake).all(1)
+    M["n_nonfinite_samples"] = int((~finite_fake).sum())
+    valid = valid & finite_fake
     x_real, x_fake = x_real[valid], x_fake[valid]
     y_real = d["tier1"][idx_test[reco]][valid]
     y_fake = tf.inverse(x_fake, d["mu_true"][idx_test[reco]][valid], d["ctx"][idx_test[reco]][valid])
@@ -169,6 +172,18 @@ def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64
         c.fit(Xc2[sub[:half2]][:, cols], yc[sub[:half2]]); return float(roc_auc_score(yc[sub[half2:]], c.predict_proba(Xc2[sub[half2:]][:, cols])[:, 1]))
     M["classifier_auc_by_variable"] = {n: _auc([j]) for j, n in enumerate(names_model)}
     M["classifier_auc_by_block"] = {"muon": _auc([0, 1, 2]), "vertex": _auc([3, 4, 5]), "calorimetry": _auc([6, 7, 8])}
+    # conditional versions: truth summary features + a subset of (flags, N, x). Separates head calibration
+    # (flags/N given truth) from the flow's conditional fidelity (x given truth).
+    nX = X.shape[1]
+
+    def _auc_cond(extra_cols):
+        cols = list(range(nX)) + [nX + c for c in extra_cols]
+        c = HistGradientBoostingClassifier(max_iter=150, learning_rate=0.1, early_stopping=True, random_state=seed)
+        c.fit(Xc[sub[:half2]][:, cols], yc[sub[:half2]]); return float(roc_auc_score(yc[sub[half2:]], c.predict_proba(Xc[sub[half2:]][:, cols])[:, 1]))
+    # layout of Xc columns after X: [minos, charge, N, x0..x8]
+    M["classifier_auc_conditional_by_block"] = {
+        "flags_and_N_only": _auc_cond([0, 1, 2]), "muon": _auc_cond([0, 1, 2, 3, 4, 5]), "vertex": _auc_cond([0, 1, 2, 6, 7, 8]),
+        "calorimetry": _auc_cond([0, 1, 2, 9, 10, 11]), "truth_only": _auc_cond([])}
 
     # conditional checks: muon response vs true P, recoil vs sum KE
     names = event_features(cls_p[:1], mom_p[:1], mask_p[:1], d["ctx"][rv[:1]])[1]
@@ -264,7 +279,9 @@ def _tables(M, m1, tdir):
         rows.append(f"{n.replace('_', chr(92)+'_')} & {r[1]:.3f} [{r[0]:.3f}, {r[2]:.3f}] & {f[1]:.3f} [{f[0]:.3f}, {f[2]:.3f}] & {v['w1']:.4f} \\\\")
     (tdir / "tier1_marginals.tex").write_text("\\begin{tabular}{lccc}\n\\toprule\nVariable (model space) & MasterAnaDev median [16\\%, 84\\%] & surrogate median [16\\%, 84\\%] & $W_1$ \\\\\n\\midrule\n" + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n")
     blk = M.get("classifier_auc_by_block", {}); byv = M.get("classifier_auc_by_variable", {})
+    cblk = M.get("classifier_auc_conditional_by_block", {})
     blk_rows = "".join(f"block: {k} only & {v:.3f} \\\\\n" for k, v in blk.items())
+    blk_rows += "".join(f"truth features + {k.replace('_', ' ')} & {v:.3f} \\\\\n" for k, v in cblk.items())
     var_rows = "".join(f"single variable: {k.replace('_', chr(92)+'_')} & {v:.3f} \\\\\n" for k, v in byv.items())
     (tdir / "closure.tex").write_text("\\begin{tabular}{lc}\n\\toprule\nTest & AUC \\\\\n\\midrule\n"
         f"real vs surrogate, reco vector only & {M['classifier_auc_marginal']:.3f} \\\\\nreal vs surrogate, (truth features, reco vector) & {M['classifier_auc_conditional']:.3f} \\\\\n"

@@ -1,0 +1,39 @@
+
+\paragraph{M2: what the surrogate now does.} On the particle set alone, the set encoder beats the M1 trees on every
+Tier 0 target (reconstructed: log loss 0.364 vs 0.423; MINOS match
+0.060 vs 0.101; charge 0.119 vs 0.127)
+and on the prong multiplicity (0.803 vs 0.843), so the raw
+final state carries information that 48 hand-built summaries lose. The 9 generated Tier 1 variables close their
+marginals to $W_1 \le 0.06$ in model units (0.005 for the matched-muon
+momentum ratio, 0.003 for $\log E_\mathrm{recoil}$), the correlation matrix agrees to
+$|\Delta\rho| \le 0.04$, and the muon response versus true momentum and the recoil versus hadronic
+kinetic energy follow MasterAnaDev in median and width. The closure classifier on the reco vector alone reaches AUC
+0.569 (blocks: muon 0.51, vertex 0.53, calorimetry 0.54); with the truth features added it
+reaches 0.617, with the flags and multiplicity perfectly calibrated (0.49) and the residual
+coming from the vertex block (0.58), then calorimetry (0.53) and muon (0.51). The M2 exit criterion of
+$\mathrm{AUC} < 0.55$ is therefore met approximately for the marginal test and not for the conditional one.
+
+\paragraph{What the residual is.} The reconstructed vertex $z$ is snapped to scintillator-plane positions for about
+a third of the events: in a 10\,mm slice of true $z$ around 7000\,mm, 111 of 331 reconstructed vertices sit at
+exactly 7007.0\,mm. Conditional on the truth the $z$ residual is therefore a comb, which a continuous flow smooths
+out; the marginal is reproduced but the conditional structure is not, exactly what the two AUCs say. The natural
+fix is a discrete head for the plane index with a continuous offset, the same pattern used for the multiplicity,
+and is deferred to the Tier 2 work where discrete-plus-continuous outputs are needed anyway. Two further
+limitations are documented: the two calibrated recoil variants are derived rather than generated
+(Section~\ref{sec:m2-iter}), and the muon response in the 1--1.5\,GeV bin (3\% of events, dominated by unmatched
+muons) has a median offset of about 0.7 model units between MasterAnaDev and the surrogate.
+
+\paragraph{Lessons for the design.} Three findings generalise beyond M2. First, closure classifiers with block-wise
+and conditional variants are far more informative than marginal plots: every defect found in this milestone was
+invisible in the one-dimensional histograms. Second, the reco variables of an analysis tuple are not all
+independent random variables; some are deterministic functions of others (calibrations), some are quantised
+(plane positions, sentinels), and a surrogate has to represent that structure explicitly rather than hope a
+density estimator discovers it. Third, sentinel conventions matter: $-9999.9$ for an undefined charge, $P=1,
+E=0$ for a direction-only prong, NaN and $10^{14}$ for a handful of corrupt rows all had to be handled before the
+statistics were meaningful.
+
+\paragraph{Deliverable.} \texttt{scripts/surrogate\_to\_ntuple.py} runs the trained model on any truth-level
+input with the interface of Section~\ref{sec:setup} and writes a pruned MasterAnaDev-style ROOT tree (46
+branches: truth passthrough, Tier 0 flags, muon, vertex, calorimetry, multiplicity, and the per-event
+reconstruction probability for reweighting). On 50\,000 truth events of the example file it reconstructs
+39.6\%, as MasterAnaDev does. Prong-level branches follow with M4.

@@ -104,3 +104,15 @@ All verified by exact round trip on 20k reco events (`tests/`).
   reco entry. After the input cuts (no neutrons, KE ≥ 50 MeV) events have 4.1 particles on average, 99% ≤ 11,
   max 31. Among reconstructed events 78.5% are MINOS-matched and 97.3% have negative reco charge. 462 subruns
   in the file, so a subrun-level 80/10/10 split gives 293k / 37k / 38k events.
+
+## Further conventions found during M2 (2026-09-23)
+
+- **Corrupt rows.** 8 of 4.77M reconstructed CC nu_mu events have NaN muon `Px/Py/Pz` or infinite `MasterAnaDev_vtx`;
+  one has a vertex coordinate of order 1e14 mm. They pass `isfinite` checks on most branches and poison any mean.
+- **`MasterAnaDev_muon_qp` = -9999.9 when not MINOS-matched**, so "qp < 0" is true for every unmatched muon. A charge
+  flag must be defined as (matched AND qp < 0).
+- **`MasterAnaDev_recoil_passivecorrected` = 0.6669 x `recoil_E` exactly for > 15% of events** (84th and 99th percentile
+  of the ratio coincide), 0.62-0.67 otherwise depending on vertex z; **`MasterAnaDev_hadron_recoil` = 1.385 x
+  `recoil_E`** to within a MeV for a large fraction. Both are calibrations of one number, not independent responses.
+- **Reconstructed vertex z snaps to plane positions** for roughly a third of events (in a 10 mm slice of true z near
+  7000 mm, 111 of 331 reco vertices are at exactly 7007.0 mm). The z residual conditional on truth is a comb.
