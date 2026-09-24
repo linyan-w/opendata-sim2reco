@@ -293,8 +293,8 @@ directly useful for validation. Start with flow matching for both tiers to keep 
 | M0 ✅ | Slimming (local or streamed from xrootd), Parquet dataset, prong table round trip, tests | Done 2026-09-23: 300 MB Parquet per 20 GB file, loads in 2 s, exact round trip |
 | M1 ✅ | Baselines: GBDT efficiency / MINOS / charge / multiplicity, MDN muon response + recoil | Done 2026-09-23: `reports/m1/`, `reports/performance/main.tex` |
 | M2 ✅ | Set encoder + Tier 0/cardinality heads + 9-d flow matching, 32 files, subrun split | Done 2026-09-23: heads beat M1 on all targets; closure AUC 0.57 marginal / 0.62 conditional (vertex-z plane snapping is the residual). `scripts/surrogate_to_ntuple.py` writes the pruned ntuple. |
-| M3 | Physics-holdout extrapolation study (§7), ensemble OOD score | Written report of where it works and where it does not |
-| M4 | Tier 2 prong set model (cardinality + set flow matching) | Reproduces multiplicity confusion and prong kinematics |
+| M3 🔶 | Tier 2 prong set model (masked set flow matching, cross-attending the particle tokens) + discrete vertex-plane head | Reproduces prong kinematics, prong-count confusion, and closes the block-wise classifiers; full pruned ntuple |
+| M4 | Physics-holdout extrapolation study (§7), ensemble OOD score. Reordered after M3 on 2026-09-24: extrapolation is mostly about hadrons, so it needs the prong model first. | Written report of where it works and where it does not |
 | M5 | First application: alternative-generator truth → surrogate reco → comparison to open data | Paper-quality reco-level comparison |
 
 ## 12. References and prior art
@@ -348,7 +348,8 @@ new generator the vertex and target are supplied by the user or sampled from the
 | Vertex | `rvtx_x, rvtx_y, rvtx_z` | continuous (3) |
 | Calorimetry | `recoil_E`, `recoil_nonmuon_nonvtx100mm`, `nonvtx_iso_blobs_energy` | continuous (3). `recoil_passivecorrected` and `hadron_recoil` turned out to be deterministic MasterAnaDev calibrations of `recoil_E` (point masses at ratio 0.6669 and 1.385, geometry dependent) and are **derived** at decode time as `recoil_E` times the median ratio in bins of vertex z (M2 finding, 2026-09-23). |
 | Counts | `n_prongs` (hadron prongs, 0..8), `n_nonvtx_iso_blobs` (0..~40) | categorical |
-| Prongs, per prong `i < n_prongs` | `pi_px, pi_py, pi_pz` (pion-hypothesis momentum), `has_proton_fit`, `p_P` (proton-hypothesis momentum magnitude), `proton_score1`, `is_exiting` | 3 continuous, 1 binary, 2 continuous, 1 binary |
+| Prongs, per prong `i < n_prongs` | `has_kinematics` (23% of prongs have no direction and no fit), direction (unit vector), `pi_P` (pion-hypothesis momentum), `has_proton_fit`, `p_P`, `proton_score1`, `is_exiting`, `is_primary_proton` | binary + continuous per prong; the pion fit exists iff `has_kinematics` |
+| Vertex plane | `vtx_z_class`: unsnapped, or snapped to plane nearest(true z) + δ, δ ∈ [-3, 3] | categorical (8) |
 
 Everything that is a function of these (energies, angles, `Q2`, `W`, `E_nu`, `multiplicity`, `hadron_number`,
 `minos_trk_p`, `nuHelicity`, sign of `muon_qp`) is computed at decode time.
@@ -372,7 +373,7 @@ Notes on what was dropped or kept in Tier 0 and the context, from measurements o
   overlaid pileup. Correlations with `n_nonvtx_iso_blobs`, `recoil_E`, and `multiplicity` are below 0.07, and
   POT terciles show no shift in any of them. Both are **dropped from the context** for v1 and marginalized. Internal reparameterizations (e.g. generating the muon as a ratio to
 the true muon momentum, or log-scaling energies) are free choices of the training code and must not leak into
-this interface. Tier 2 (prongs) is absent in the M2 model and present from M4 on; the interface is the same.
+this interface. Tier 2 (prongs) is absent in the M2 model and present from M3 on; the interface is the same.
 
 ### 13.3 How MasterAnaDev fills the hadron prongs (measured)
 

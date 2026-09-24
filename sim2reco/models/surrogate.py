@@ -7,13 +7,18 @@ import torch.nn.functional as F
 
 from .encoder import SetEncoder
 from .flow import FlowMatcher
+from .prongflow import ProngFlow
 
 N_PRONG_CLASSES = 9  # 0..8
 TIER1_DIM = 9  # MODEL_COLS of sim2reco.data.compact
+PRONG_DIM = 10  # sim2reco.data.prongs_tf.PRONG_DIM
+N_VTX_CLASSES = 8  # sim2reco.data.prongs_tf.VertexPlaneTable.N_CLASSES
+PRONG_DIM_CAP = 8  # sim2reco.data.compact.N_PRONG_CAP
 
 
 class Surrogate(nn.Module):
-    def __init__(self, d_model=128, n_heads=4, n_layers=4, flow_hidden=512, flow_layers=4):
+    def __init__(self, d_model=128, n_heads=4, n_layers=4, flow_hidden=512, flow_layers=4, tier2=False,
+                 prong_layers=3):
         super().__init__()
         self.enc = SetEncoder(d_model, n_heads, n_layers)
         self.tier0 = nn.Sequential(nn.Linear(d_model, d_model), nn.SiLU(), nn.Linear(d_model, 3))
@@ -21,16 +26,22 @@ class Surrogate(nn.Module):
         self.flag_emb = nn.Linear(2, 32)
         self.n_emb = nn.Embedding(N_PRONG_CLASSES, 32)
         self.flow = FlowMatcher(TIER1_DIM, d_model + 64, flow_hidden, flow_layers)
+        self.tier2 = tier2
+        if tier2:
+            # vertex-plane class head (unsnapped / snapped to nearest plane + delta) on z, flags and N
+            self.vtx = nn.Sequential(nn.Linear(d_model + 64, d_model), nn.SiLU(), nn.Linear(d_model, N_VTX_CLASSES))
+            # prong set flow, conditioned on z, flags, N, and the Tier 1 vector; cross-attends particle tokens
+            self.prong = ProngFlow(PRONG_DIM, d_model, d_model + 64 + TIER1_DIM, prong_layers)
 
-    def encode(self, b):
-        z, _ = self.enc(b["cls"], b["mom"], b["mask"], b["ctx"])
-        return z
+    def encode(self, b, return_tokens=False):
+        z, h = self.enc(b["cls"], b["mom"], b["mask"], b["ctx"])
+        return (z, h) if return_tokens else z
 
     def flow_cond(self, z, flags, nprong):
         return torch.cat([z, self.flag_emb(flags), self.n_emb(nprong.clamp(0, N_PRONG_CLASSES - 1))], -1)
 
     def losses(self, b):
-        z = self.encode(b)
+        z, h = self.encode(b, return_tokens=True)
         t0 = b["tier0"]; reco = t0[:, 0] > 0; minos = reco & (t0[:, 1] > 0)
         logits = self.tier0(z)
         l_exist = F.binary_cross_entropy_with_logits(logits[:, 0], t0[:, 0])
@@ -40,7 +51,16 @@ class Surrogate(nn.Module):
         fl = reco & (b["valid"] > 0)   # exclude the rare corrupt tuple entries from the flow loss
         cond = self.flow_cond(z[fl], t0[fl, 1:3], b["nprong"][fl])
         l_flow = self.flow.loss(b["x1"][fl], cond).mean() if fl.any() else logits.sum() * 0
-        return {"exist": l_exist, "minos": l_minos, "charge": l_charge, "card": l_card, "flow": l_flow}
+        out = {"exist": l_exist, "minos": l_minos, "charge": l_charge, "card": l_card, "flow": l_flow}
+        if self.tier2:
+            out["vtx"] = F.cross_entropy(self.vtx(cond), b["vclass"][fl]) if fl.any() else logits.sum() * 0
+            pm = b["pmask"][fl]; has = pm.any(1)
+            if has.any():
+                pc = torch.cat([cond[has], b["x1"][fl][has]], -1)
+                out["prong"] = self.prong.loss(b["prongs"][fl][has], pc, h[fl][has], b["mask"][fl][has], pm[has])
+            else:
+                out["prong"] = logits.sum() * 0
+        return out
 
     @torch.no_grad()
     def predict_probs(self, b):
@@ -61,5 +81,15 @@ class Surrogate(nn.Module):
         charge = minos & (u[:, 2] < p0[:, 2])
         flags = torch.stack([minos, charge], -1).float() if teacher_flags is None else teacher_flags
         nprong = torch.multinomial(pn, 1)[:, 0] if teacher_nprong is None else teacher_nprong
-        x1 = self.flow.sample(self.flow_cond(z, flags, nprong), n_steps)
-        return {"exist": exist, "minos": flags[:, 0] > 0, "charge": flags[:, 1] > 0, "nprong": nprong, "x1": x1, "p0": p0, "pn": pn}
+        cond = self.flow_cond(z, flags, nprong)
+        x1 = self.flow.sample(cond, n_steps)
+        out = {"exist": exist, "minos": flags[:, 0] > 0, "charge": flags[:, 1] > 0, "nprong": nprong, "x1": x1, "p0": p0, "pn": pn}
+        if self.tier2:
+            pv = F.softmax(self.vtx(cond), -1)
+            out["vclass"] = torch.multinomial(pv, 1)[:, 0]; out["pv"] = pv
+            _, h = self.encode(b, return_tokens=True)
+            N = int(min(nprong.max().item(), PRONG_DIM_CAP)) if len(nprong) else 0
+            pmask = torch.arange(max(N, 1), device=z.device)[None, :] < nprong.clamp(max=PRONG_DIM_CAP)[:, None]
+            out["pmask"] = pmask
+            out["prongs"] = self.prong.sample(torch.cat([cond, x1], -1), h, b["mask"], pmask, n_steps) if N > 0 else torch.zeros(len(z), 1, PRONG_DIM, device=z.device)
+        return out

@@ -5,7 +5,7 @@ reconstructed variables, trained on the [MINERvA open data](https://minerva.fnal
 extrapolate to final states the released MC does not cover (alternative generators, higher multiplicity, new
 kinematic regions).
 
-Status: M0 (data pipeline), M1 (baselines) and M2 (set encoder + flow-matching surrogate, closure AUC 0.57) done; M3 extrapolation study and M4 prong model next. Read [`docs/PROJECT.md`](docs/PROJECT.md) first; performance numbers are in `reports/performance/` (LaTeX, compiled with tectonic).
+Status: M0 (data pipeline), M1 (baselines) and M2 (set encoder + flow-matching surrogate, closure AUC 0.57) done; M3 prong set model in progress; M4 extrapolation study after. Read [`docs/PROJECT.md`](docs/PROJECT.md) first; performance numbers are in `reports/performance/` (LaTeX, compiled with tectonic).
 
 ## Model schematic
 

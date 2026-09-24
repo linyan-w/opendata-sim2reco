@@ -18,7 +18,7 @@ a third of the events: in a 10\,mm slice of true $z$ around 7000\,mm, 111 of 331
 exactly 7007.0\,mm. Conditional on the truth the $z$ residual is therefore a comb, which a continuous flow smooths
 out; the marginal is reproduced but the conditional structure is not, exactly what the two AUCs say. The natural
 fix is a discrete head for the plane index with a continuous offset, the same pattern used for the multiplicity,
-and is deferred to the Tier 2 work where discrete-plus-continuous outputs are needed anyway. Two further
+and is part of M3, the prong model, where discrete-plus-continuous outputs are needed anyway. Two further
 limitations are documented: the two calibrated recoil variants are derived rather than generated
 (Section~\ref{sec:m2-iter}), and the muon response in the 1--1.5\,GeV bin (3\% of events, dominated by unmatched
 muons) has a median offset of about 0.7 model units between MasterAnaDev and the surrogate.
@@ -36,4 +36,4 @@ statistics were meaningful.
 input with the interface of Section~\ref{sec:setup} and writes a pruned MasterAnaDev-style ROOT tree (46
 branches: truth passthrough, Tier 0 flags, muon, vertex, calorimetry, multiplicity, and the per-event
 reconstruction probability for reweighting). On 50\,000 truth events of the example file it reconstructs
-39.6\%, as MasterAnaDev does. Prong-level branches follow with M4.
+39.6\%, as MasterAnaDev does. Prong-level branches follow with M3.

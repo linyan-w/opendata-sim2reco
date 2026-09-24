@@ -149,7 +149,7 @@ The first surrogate proper (Fig.~\ref{fig:schematic}): a transformer set encoder
 (class embedding plus scaled momentum features) with a global context token; Tier 0 and cardinality heads on
 the event embedding; and a conditional flow-matching model (linear path, Gaussian source, midpoint sampler
 with 100 steps) for the 9 generated Tier 1 variables, conditioned on the embedding, the Tier 0 flags and the prong
-multiplicity; two further calorimetric branches are derived at decode time (Section~\ref{sec:m2-iter}). Internally the muon is generated as $\log(P_\mathrm{reco}/P_\mathrm{true})$ and two slope
+multiplicity; two further calorimetric branches are derived at decode time (Section~\ref{sec:m2-iter}). Prong-level output is M3. Internally the muon is generated as $\log(P_\mathrm{reco}/P_\mathrm{true})$ and two slope
 differences, the vertex as a residual, energies as $\log(E+1)$ with exact zeros dequantised into a negative
 band; muon and vertex columns are asinh-compressed so their tails are logarithmic; all robustly standardised.
 The encoder has 4 layers of width 128, the flow 5 layers of width 768; training is joint on all four losses.

@@ -58,8 +58,9 @@ def encode(ev: ak.Array) -> ak.Array:
     p_P[rows, j[rows]] = pP[rows]
     p_sc[rows, j[rows]] = psc[rows]
     unmatched = has_prim.sum() - len(rows)
-    if unmatched:
-        raise ValueError(f"{unmatched} primary protons did not match a prong by theta")
+    if unmatched:  # corrupt rows (a handful per million): treat as no proton fit
+        import warnings
+        warnings.warn(f"{unmatched} primary protons did not match a prong by theta; treated as no proton fit")
 
     # proton hypothesis, secondaries
     sfit = ev["MasterAnaDev_sec_protons_E_fromdEdx"] > 0
@@ -74,9 +75,11 @@ def encode(ev: ak.Array) -> ak.Array:
         j2 = d2.argmin(1)
         bad = d2[np.arange(len(ev_idx)), j2] >= _THETA_TOL
         if bad.any():
-            raise ValueError(f"{bad.sum()} secondary protons did not match a prong by theta")
-        p_P[ev_idx, j2] = f_P
-        p_sc[ev_idx, j2] = f_sc
+            import warnings
+            warnings.warn(f"{bad.sum()} secondary protons did not match a prong by theta; dropped")
+        good = ~bad
+        p_P[ev_idx[good], j2[good]] = f_P[good]
+        p_sc[ev_idx[good], j2[good]] = f_sc[good]
 
     rec = ak.zip({
         "theta": th, "phi": ph,
