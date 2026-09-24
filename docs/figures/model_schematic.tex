@@ -42,29 +42,31 @@
   $\Rightarrow$ token states $h_i\in\mathbb{R}^{128}$};
 
 % ---------------- classification heads ----------------
-\node[head, draw=ccls, right=14mm of enc.east, anchor=west, yshift=16mm] (t0) {\textbf{Event classification heads} (MLP on $z$)\\
-  $p(\text{reco muon candidate}\mid z)$ \hfill Bernoulli\\
-  $p(\text{MINOS matched}\mid z)$ \hfill Bernoulli\\
-  $p(\text{charge}<0\mid z)$ \hfill Bernoulli\\
-  $p(N_\text{prongs}\mid z)$, $N\in\{0..8\}$ \hfill categorical};
-\node[head, draw=ccls, below=13mm of t0.south west, anchor=north west] (vtx) {\textbf{Vertex-plane head} (MLP)\\
+\node[head, draw=ccls, right=14mm of enc.east, anchor=west, yshift=24mm] (t0) {\textbf{Event flag heads} (MLPs on $z$)\\
+  $p(\text{reco muon candidate}\mid z)$, $p(\text{MINOS matched}\mid z)$,\\
+  $p(\text{charge}<0\mid z)$ \hfill 3 Bernoulli};
+\node[head, draw=ccls, below=8mm of t0.south west, anchor=north west] (card) {\textbf{Hadron multiplicity head} (MLP on $z$)\\
+  $p(N_\text{prongs}\mid z)$, $N\in\{0,\dots,8\}$ \hfill categorical\\
+  sampled $N$ fixes the number of prong tokens below};
+\node[head, draw=ccls, below=8mm of card.south west, anchor=north west] (vtx) {\textbf{Vertex-plane head} (MLP)\\
   in: $c_1$, phase of true $z$ in the 22\,mm plane cycle\\
   out: 9 classes: unsnapped / plane $\delta\!\in\![-3,3]$ / far plane};
 
 % ---------------- generative heads ----------------
-\node[head, draw=cgen, below=13mm of vtx.south west, anchor=north west] (t1) {\textbf{Event flow} (conditional flow matching, 9-d)\\
+\node[head, draw=cgen, below=8mm of vtx.south west, anchor=north west] (t1) {\textbf{Event flow} (conditional flow matching, 9-d)\\
   $x_1 = $ muon $(\log P/P_\text{true},\ \Delta\theta_x,\ \Delta\theta_y)$,\\
   \hphantom{$x_1 = $} vertex residual $(\Delta x,\Delta y,\Delta z)$,\\
   \hphantom{$x_1 = $} $\log E$: recoil, non-vertex $100$\,mm, isolated blobs\\
   velocity MLP 5$\times$768; cond.\ $c_1=[z,\ \text{flags},\ \text{emb}(N)]$};
-\node[head, draw=cgen, below=13mm of t1.south west, anchor=north west] (t2) {\textbf{Prong set flow} (masked flow matching, $N\times 10$)\\
+\node[head, draw=cgen, below=8mm of t1.south west, anchor=north west] (t2) {\textbf{Prong set flow} (masked flow matching, $N\times 10$)\\
+  \textbf{second transformer} (3 layers) over the $N$ prong tokens\\
+  self-attention over prongs, cross-attention to $h_i$\\
   per prong: has-kinematics, $\hat u$ (3), $\log P_\pi$, proton fit,\\
   \hphantom{per prong:} $\log P_p$, logit score, exiting, primary\\
-  equivariant transformer, 3 layers: self-attn over prongs,\\
-  cross-attn to $h_i$; cond.\ $[c_1,\ x_1]$; flags dequantised};
+  binary fields dequantised; cond.\ $[c_1,\ x_1]$};
 
 % ---------------- decoder / output ----------------
-\node[box, draw=cout, right=22mm of t1.east, anchor=west, yshift=-10mm] (dec) {\textbf{Decoder}\\
+\node[box, draw=cout, right=22mm of t1.east, anchor=west, yshift=-6mm] (dec) {\textbf{Decoder}\\
   inverse transforms (asinh, log, ratio tables)\\
   vertex $z$: snap to plane if class $>0$\\
   prong table $\to$ pion/proton/sec-proton blocks\\
@@ -77,18 +79,18 @@
 \draw[arr] (gen) -- (pipe);
 \draw[arr] (pipe) -- (tok);
 \draw[arr] (tok.east) -- ++(7mm,0) |- (enc.west);
-\draw[arr] (enc.east) -- ++(6mm,0) |- (t0.west);
-\draw[arr] (enc.east) -- ++(6mm,0) |- (vtx.west);
-\draw[arr] (enc.east) -- ++(6mm,0) |- (t1.west);
-\draw[arr] (enc.east) -- ++(6mm,0) |- (t2.west);
+\foreach \h in {t0,card,vtx,t1,t2} { \draw[arr] (enc.east) -- ++(6mm,0) |- (\h.west); }
 \draw[arrc] (enc.south) -- ++(0,-4mm) -| ($(t2.west)+(-3mm,0)$) node[dim, pos=0.3, below] {$h_i$} -- (t2.west);
-% conditioning on sampled quantities (dashed, inside the head column)
-\draw[arrd] ($(t0.south)+(-30mm,0)$) -- ($(t0.south)+(-30mm,0)$ |- vtx.north) node[dim, pos=0.5, left, yshift=-0.8mm] {flags, $N$};
-\draw[arrd] ($(vtx.south)+(-30mm,0)$) -- ($(vtx.south)+(-30mm,0)$ |- t1.north) node[dim, pos=0.5, left, yshift=-0.8mm] {flags, $N$};
-\draw[arrd] ($(t1.south)+(-30mm,0)$) -- ($(t1.south)+(-30mm,0)$ |- t2.north) node[dim, pos=0.5, left, yshift=-0.8mm] {flags, $N$, $x_1$};
+% hierarchical sampling: each head conditions the ones below it (dashed); N sets the prong-token count (solid)
+\draw[arrd] ([xshift=-30mm]t0.south) -- ([xshift=-30mm]card.north) node[dim, pos=0.5, left] {flags};
+\draw[arrd] ([xshift=-30mm]card.south) -- ([xshift=-30mm]vtx.north) node[dim, pos=0.5, left] {flags, $N$};
+\draw[arrd] ([xshift=-30mm]vtx.south) -- ([xshift=-30mm]t1.north) node[dim, pos=0.5, left] {flags, $N$};
+\draw[arrd] ([xshift=-30mm]t1.south) -- ([xshift=-30mm]t2.north) node[dim, pos=0.5, left] {flags, $N$, $x_1$};
+\draw[arr, line width=1.1pt] (card.east) -- ++(4.5mm,0) |- ([yshift=4mm]t2.north) -- (t2.north);
+\node[dim, anchor=west, rotate=-90] at ([xshift=5.5mm, yshift=-4mm]vtx.east) {sampled $N$ $\Rightarrow$ $N$ prong tokens};
 % outputs collected on a bus to the decoder
-\coordinate (bus) at ($(t0.east)+(9mm,0)$);
-\foreach \h in {t0,vtx,t1,t2} { \draw[line width=0.7pt, draw=ink] (\h.east) -- (\h.east -| bus); }
+\coordinate (bus) at ($(t0.east)+(12mm,0)$);
+\foreach \h in {t0,card,vtx,t1,t2} { \draw[line width=0.7pt, draw=ink] (\h.east) -- (\h.east -| bus); }
 \draw[line width=0.7pt, draw=ink] (t0.east -| bus) -- (t2.east -| bus);
 \draw[arr] (dec.west -| bus) -- (dec.west);
 \draw[arr] (dec) -- (nt);
@@ -96,13 +98,13 @@
 % ---------------- stage labels ----------------
 \node[stage, above=2mm of gen.north west] {INPUT (generator-agnostic)};
 \node[stage, above=2mm of enc.north west] {ENCODER};
-\node[stage, above=2mm of t0.north west] {HEADS: sampled in this order $\downarrow$};
+\node[stage, above=2mm of t0.north west] {HEADS ON THE SHARED ENCODER, sampled top to bottom (hierarchical) $\downarrow$};
 \node[stage, above=2mm of dec.north west, xshift=0mm] {OUTPUT};
 
 % ---------------- legend ----------------
 \node[dim, below=6mm of t2.south west, anchor=north west, align=left] {
   solid $=$ data flow;\quad dashed $=$ conditioning on sampled quantities;\quad dotted $=$ cross-attention to token states.\\
-  Sampling order: classification heads $\to$ vertex class $\to$ event flow $\to$ prong set flow $\to$ decoder.
+  Sampling order: flags $\to$ multiplicity $N$ $\to$ vertex class $\to$ event flow $\to$ prong set flow ($N$ tokens) $\to$ decoder.
   Training: joint, all losses, warm start of the prong flow from the event-level model.};
 
 \end{tikzpicture}
