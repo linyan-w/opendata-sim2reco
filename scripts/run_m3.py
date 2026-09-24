@@ -10,7 +10,7 @@ if __name__ == "__main__":
     ap.add_argument("out_dir"); ap.add_argument("--slim-dir", default="data/slim"); ap.add_argument("--n-files", type=int, default=None)
     ap.add_argument("--epochs", type=int, default=12); ap.add_argument("--bs", type=int, default=1024); ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--init", default="reports/m2/model.pt"); ap.add_argument("--eval-only", action="store_true"); ap.add_argument("--steps", type=int, default=64)
-    ap.add_argument("--m1", default="reports/m1/metrics.json"); ap.add_argument("--tier2-only", action="store_true")
+    ap.add_argument("--m1", default="reports/m1/metrics.json"); ap.add_argument("--tier2-only", action="store_true"); ap.add_argument("--max-test", type=int, default=None)
     a = ap.parse_args()
     from sim2reco.train import m2, m3
     from sim2reco.data.compact import load_compact
@@ -22,6 +22,11 @@ if __name__ == "__main__":
         d = load_compact(stems); split = split_by_subrun(d["subrun"], seed=0)
         model, tf, ptf = m3.load_model(pathlib.Path(a.out_dir) / "model.pt")
         idx, ds, ld = m3.make_loaders(d, split, tf, ptf, a.bs, 0)
+        if a.max_test:  # quick checks on a subset of the test split
+            from torch.utils.data import DataLoader
+            from sim2reco.data.compact import CompactDataset, collate
+            idx["test"] = idx["test"][:a.max_test]
+            ld["test"] = DataLoader(CompactDataset(d, idx["test"], tf, 0, prong_tf=ptf), batch_size=a.bs, collate_fn=collate, num_workers=4)
     else:
         d, split, tf, ptf, idx, ld = m3.train(stems, a.out_dir, a.init, a.epochs, a.bs, a.lr)
         model, tf, ptf = m3.load_model(pathlib.Path(a.out_dir) / "model.pt")

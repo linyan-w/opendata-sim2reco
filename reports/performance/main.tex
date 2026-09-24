@@ -103,7 +103,14 @@ of the final state. The surrogate, which sees the raw particle set, beats the tr
 clearly for the reconstruction flag (0.364 versus 0.423). The predicted
 reconstruction probability is unbiased as a function of the true hadron count (Fig.~\ref{fig:heads}, right).
 Table~\ref{tab:mult} does the same for the prong multiplicity; the sampled multiplicity reproduces the
-MasterAnaDev distribution (Fig.~\ref{fig:heads}, left).
+MasterAnaDev distribution (Fig.~\ref{fig:heads}, left). Figure~\ref{fig:mult-conf} shows the multiplicity
+response as confusion matrices. The two truth-conditioned matrices, $P(N_\mathrm{reco} \mid n_\mathrm{true})$
+for MasterAnaDev and for the surrogate, agree to 0.01 in every cell: an event with one true charged hadron is
+reconstructed with no prong 51\% of the time and with one prong 42\%, with four true charged hadrons the most
+probable outcome is still a single prong (43\%), and the surrogate reproduces this saturation. The third matrix
+pairs MasterAnaDev's count with one surrogate draw for the same event (Table~\ref{tab:mult-conf}); since
+reconstruction is stochastic the two draws need not coincide, and the matrix should be read as a check that the
+surrogate's count is correlated with the real one through the truth, which it is, not as an accuracy.
 
 \begin{table}[h]\centering
 \input{../m3/tables/tier0.tex}
@@ -116,6 +123,21 @@ summary features, and the surrogate.}
 \input{../m3/tables/multiplicity.tex}
 \caption{Prong multiplicity head ($N \in \{0,\dots,8\}$) among reconstructed events.}
 \label{tab:mult}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{../m3/figures/m3_multiplicity_confusion.png}
+\caption{Prong-multiplicity confusion, row-normalised. Left and centre: reconstructed prongs versus true charged
+hadrons (p, $\pi^\pm$, $K^\pm$ after FSI) for MasterAnaDev and for the surrogate. Right: MasterAnaDev's count
+versus one surrogate draw for the same event.}
+\label{fig:mult-conf}
+\end{figure}
+
+\begin{table}[h]\centering\small
+\input{../m3/tables/multiplicity_confusion.tex}
+\caption{Event-by-event confusion between MasterAnaDev's prong count (rows, with the number of test events) and
+one surrogate draw (columns), row-normalised.}
+\label{tab:mult-conf}
 \end{table}
 
 \begin{figure}[h]\centering
@@ -213,6 +235,32 @@ surrogate reproduces both shapes (medians 0.26 versus 0.23 for proton-led, 0.077
 0.079 for pion-led). The same figure shows the pion-hypothesis momentum in MeV and the prong angle to the
 beam in degrees, where the backward population above 90$^\circ$ and the dip at 90$^\circ$ from the planar
 tracking are both present in the surrogate.
+
+Because the surrogate produces no prong-to-particle correspondence, particle identification is tested on a
+sample where the correspondence is unambiguous: events with exactly one true charged hadron and exactly one
+reconstructed prong (59,334 MasterAnaDev and 59,420 surrogate events). Table~\ref{tab:pid} and
+Figure~\ref{fig:pid} give, for each true species, the probability of each reconstruction outcome: no kinematics,
+kinematics without a proton fit, proton fit with score below 0.5, proton fit with score at or above 0.5. A true
+proton ends with a high proton score in 27\% of cases against 5\% for a true $\pi^+$, and the surrogate
+reproduces every entry of the matrix to within 0.016. Using the score to separate protons from charged
+pions among prongs with a proton fit gives an AUC of 0.739 in MasterAnaDev and 0.724 in the
+surrogate (Fig.~\ref{fig:pid}, right): the surrogate's PID is slightly less informative than the real one, by
+0.015 in AUC, which is the one place in the hadron output where a residual difference is measurable.
+
+\begin{table}[h]\centering\small
+\resizebox{\textwidth}{!}{\input{../m3/tables/pid_species.tex}}
+\caption{Reconstruction outcome by true hadron species on single-hadron, single-prong events: MasterAnaDev /
+surrogate row fractions, and the proton-vs-pion AUC of the proton score among prongs with a proton fit.}
+\label{tab:pid}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{../m3/figures/m3_pid_species.png}
+\caption{Particle identification versus true species on single-hadron, single-prong events. Left and centre:
+row-normalised outcome matrices for MasterAnaDev and the surrogate. Right: ROC curves of the proton score for
+true protons against true charged pions.}
+\label{fig:pid}
+\end{figure}
 
 \begin{figure}[h]\centering
 \includegraphics[width=\textwidth]{../m3/figures/m3_prong_conditionals.png}

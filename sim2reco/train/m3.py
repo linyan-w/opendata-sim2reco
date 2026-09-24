@@ -165,10 +165,104 @@ def evaluate_tier2(model, tf, ptf, d, idx_test, ld_test, out_dir, device="cuda",
     lead_cls = X[:, names.index("lead_had_cls")].astype(int)
     nch = d["n_charged_true"][ir].astype(int) if "n_charged_true" in d else None
     M["validation"] = _prong_validation(ke, lead_pP_r, lead_pP_f, Er, Ef, nch, lead_cls, Preal, Pfake, pf_r, pf_f, off_real_p, off_fake_p, out / "figures")
+    # multiplicity confusion: reco N vs true charged hadrons (MasterAnaDev and surrogate), and event-by-event
+    n_real = np.minimum(d["nprong"][ir].astype(int), 6); n_fake = np.minimum(NP[reco].astype(int), 6)
+    K = 7
+    if nch is not None:
+        nc = np.minimum(nch, 6)
+        M["confusion_true_charged_vs_reco"] = {"masteranadev": _confusion(nc, n_real, K).tolist(), "surrogate": _confusion(nc, n_fake, K).tolist()}
+    M["confusion_event_by_event"] = _confusion(n_real, n_fake, K).tolist()
+    _confusion_figure(M, out / "figures", out / "tables")
+    # PID vs true species on a clean sample: one true charged hadron and one reconstructed prong
+    if nch is not None:
+        M["pid"] = _pid_validation(nch, lead_cls, Preal, Pfake, off_real_p, off_fake_p, out / "figures", out / "tables")
     (out / "metrics_tier2.json").write_text(json.dumps(M, indent=1, default=float))
     _figures(M, Preal, Pfake, kin_r, kin_f, pf_r, pf_f, Er, Ef, off_real, off_fake, out / "figures")
     _tables(M, out / "tables")
     return M
+
+
+def _confusion(a, b, K):
+    C = np.zeros((K, K), int); np.add.at(C, (a, b), 1); return C
+
+
+def _confusion_figure(M, fdir, tdir):
+    import matplotlib.pyplot as plt
+    def rownorm(C):
+        C = np.asarray(C, float); return C / np.clip(C.sum(1, keepdims=True), 1, None)
+    mats = []
+    if "confusion_true_charged_vs_reco" in M:
+        mats += [(rownorm(M["confusion_true_charged_vs_reco"]["masteranadev"]), "MasterAnaDev", "true charged hadrons after FSI"),
+                 (rownorm(M["confusion_true_charged_vs_reco"]["surrogate"]), "surrogate", "true charged hadrons after FSI")]
+    mats.append((rownorm(M["confusion_event_by_event"]), "event by event", "MasterAnaDev reco prongs"))
+    fig, axs = plt.subplots(1, len(mats), figsize=(3.9 * len(mats), 3.6))
+    labels = [str(k) for k in range(6)] + ["6+"]
+    for ax, (C, title, ylab) in zip(np.atleast_1d(axs), mats):
+        im = ax.imshow(C, vmin=0, vmax=1, cmap="Blues", origin="lower")
+        for i in range(C.shape[0]):
+            for j in range(C.shape[1]):
+                if C[i, j] >= 0.005: ax.text(j, i, f"{C[i,j]:.2f}", ha="center", va="center", fontsize=6.5, color="white" if C[i, j] > 0.6 else "black")
+        ax.set_xticks(range(7)); ax.set_yticks(range(7)); ax.set_xticklabels(labels, fontsize=8); ax.set_yticklabels(labels, fontsize=8); ax.grid(False)
+        ax.set_xlabel("reco prongs" if "event" not in title else "surrogate reco prongs", fontsize=9); ax.set_ylabel(ylab, fontsize=9); ax.set_title(title, fontsize=10, loc="left")
+    fig.colorbar(im, ax=np.atleast_1d(axs).tolist(), shrink=0.8, label="row fraction")
+    fig.savefig(fdir / "m3_multiplicity_confusion.png", dpi=150, bbox_inches="tight"); plt.close(fig)
+    # LaTeX table of the event-by-event confusion (row-normalised)
+    C = rownorm(M["confusion_event_by_event"]); tot = np.asarray(M["confusion_event_by_event"]).sum(1)
+    hdr = " & ".join(labels)
+    rows = [f"{labels[i]} ({int(tot[i]):,}) & " + " & ".join(f"{C[i,j]:.2f}" for j in range(7)) + " \\\\" for i in range(7)]
+    (tdir / "multiplicity_confusion.tex").write_text("\\begin{tabular}{l" + "c" * 7 + "}\n\\toprule\nMasterAnaDev $N$ (events) $\\backslash$ surrogate $N$ & " + hdr + " \\\\\n\\midrule\n" + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n")
+
+
+PID_SPECIES = [(4, "p"), (5, r"$\pi^+$"), (6, r"$\pi^-$"), (8, r"$K^\pm$")]
+PID_CATS = ["no kinematics", "no proton fit", "proton fit, score $<0.5$", "proton fit, score $\\geq 0.5$"]
+
+
+def _pid_category(P):
+    kin = P[:, 2] > 0.5; pf = kin & (P[:, 4] > 0.5)
+    return np.where(~kin, 0, np.where(~pf, 1, np.where(P[:, 6] < 0.5, 2, 3)))
+
+
+def _pid_validation(nch, lead_cls, Pr, Pf, offr, offf, fdir, tdir):
+    """Events with exactly one true charged hadron (p, pi, K after FSI) and exactly one reconstructed prong:
+    the prong is that hadron's. Matrix true species x reco PID category, and proton-vs-pion ROC of the score."""
+    from sklearn.metrics import roc_auc_score, roc_curve
+    import matplotlib.pyplot as plt
+    one_r = (nch == 1) & (np.diff(offr) == 1); one_f = (nch == 1) & (np.diff(offf) == 1)
+    cat_r = _pid_category(Pr[offr[:-1][one_r]]); cat_f = _pid_category(Pf[offf[:-1][one_f]])
+    cls_r, cls_f = lead_cls[one_r], lead_cls[one_f]
+    def matrix(cls, cat):
+        Mx = np.zeros((len(PID_SPECIES), 4))
+        for i, (c, _) in enumerate(PID_SPECIES):
+            s = cls == c
+            if s.sum(): Mx[i] = np.bincount(cat[s], minlength=4) / s.sum()
+        return Mx, [int((cls == c).sum()) for c, _ in PID_SPECIES]
+    Mr, nr = matrix(cls_r, cat_r); Mf, nf = matrix(cls_f, cat_f)
+    out = {"n_events": [int(one_r.sum()), int(one_f.sum())], "matrix_masteranadev": Mr.tolist(), "matrix_surrogate": Mf.tolist(), "n_per_species": [nr, nf],
+           "max_abs_diff": float(np.abs(Mr - Mf).max())}
+    # proton vs charged pion separation with the score, among prongs with a proton fit
+    def roc(cls, P1):
+        sc = P1[:, 6]; pf = (P1[:, 2] > 0.5) & (P1[:, 4] > 0.5); isp = cls == 4; ispi = np.isin(cls, [5, 6]); s = pf & (isp | ispi)
+        return roc_auc_score(isp[s], sc[s]), roc_curve(isp[s], sc[s])
+    auc_r, (fpr_r, tpr_r, _) = roc(cls_r, Pr[offr[:-1][one_r]]); auc_f, (fpr_f, tpr_f, _) = roc(cls_f, Pf[offf[:-1][one_f]])
+    out["score_auc_p_vs_pi"] = [float(auc_r), float(auc_f)]
+    fig, axs = plt.subplots(1, 3, figsize=(12, 3.6), gridspec_kw={"width_ratios": [1.15, 1.15, 1]})
+    keep = [i for i in range(len(PID_SPECIES)) if nr[i] > 0]
+    for ax, Mx, title in ((axs[0], Mr[keep], "MasterAnaDev"), (axs[1], Mf[keep], "surrogate")):
+        im = ax.imshow(Mx, vmin=0, vmax=1, cmap="Blues", origin="lower", aspect="auto")
+        for i in range(Mx.shape[0]):
+            for j in range(Mx.shape[1]): ax.text(j, i, f"{Mx[i,j]:.2f}", ha="center", va="center", fontsize=8, color="white" if Mx[i, j] > 0.6 else "black")
+        ax.set_xticks(range(4)); ax.set_xticklabels(PID_CATS, fontsize=7, rotation=20, ha="right"); ax.set_yticks(range(len(keep))); ax.set_yticklabels([PID_SPECIES[i][1] for i in keep], fontsize=9)
+        ax.set_ylabel("true hadron species", fontsize=9); ax.set_title(title, fontsize=10, loc="left"); ax.grid(False)
+    axs[2].plot(fpr_r, tpr_r, color=plots.PALETTE["real"], label=f"MasterAnaDev, AUC {auc_r:.3f}"); axs[2].plot(fpr_f, tpr_f, "--", color=plots.PALETTE["model"], label=f"surrogate, AUC {auc_f:.3f}")
+    axs[2].plot([0, 1], [0, 1], ":", color="gray", lw=1); axs[2].set_xlabel("pion prongs accepted"); axs[2].set_ylabel("proton prongs accepted"); axs[2].legend(frameon=False, fontsize=8); axs[2].set_title("proton score ROC, p vs $\\pi^\\pm$", fontsize=10, loc="left")
+    fig.savefig(fdir / "m3_pid_species.png", dpi=150, bbox_inches="tight"); plt.close(fig)
+    rows = []
+    for i, (c, name) in enumerate(PID_SPECIES):
+        if nr[i] == 0: continue  # e.g. pi- cannot be the only charged hadron of a CC nu_mu event
+        rows.append(f"{name} ({nr[i]:,}) & " + " & ".join(f"{Mr[i,j]:.2f} / {Mf[i,j]:.2f}" for j in range(4)) + " \\\\")
+    (tdir / "pid_species.tex").write_text("\\begin{tabular}{lcccc}\n\\toprule\ntrue species (events) & " + " & ".join(PID_CATS) + " \\\\\n\\midrule\n" + "\n".join(rows)
+        + f"\n\\midrule\nproton-vs-pion score AUC & \\multicolumn{{4}}{{c}}{{MasterAnaDev {auc_r:.3f} / surrogate {auc_f:.3f}}} \\\\\n\\bottomrule\n\\end{{tabular}}\n")
+    return out
 
 
 def _profile(ax, x, yr, yf, edges, ylabel, xlabel, log=True, frac=False):
