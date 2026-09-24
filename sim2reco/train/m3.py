@@ -161,10 +161,73 @@ def evaluate_tier2(model, tf, ptf, d, idx_test, ld_test, out_dir, device="cuda",
         if s.sum() > 100: rows.append({"lo": lo, "hi": hi, "n": int(s.sum()), "frac_with_pfit": [float(np.isfinite(r_).mean()), float(np.isfinite(f_).mean())],
                                        "real_q16_50_84": np.nanpercentile(r_, [16, 50, 84]).tolist() if np.isfinite(r_).any() else None, "fake_q16_50_84": np.nanpercentile(f_, [16, 50, 84]).tolist() if np.isfinite(f_).any() else None})
     M["lead_proton_P_by_true_KE"] = rows
+    # physical-units validation against the truth (proton-fit rate, reco proton P, prong count, PID score)
+    lead_cls = X[:, names.index("lead_had_cls")].astype(int)
+    nch = d["n_charged_true"][ir].astype(int) if "n_charged_true" in d else None
+    M["validation"] = _prong_validation(ke, lead_pP_r, lead_pP_f, Er, Ef, nch, lead_cls, Preal, Pfake, pf_r, pf_f, off_real_p, off_fake_p, out / "figures")
     (out / "metrics_tier2.json").write_text(json.dumps(M, indent=1, default=float))
     _figures(M, Preal, Pfake, kin_r, kin_f, pf_r, pf_f, Er, Ef, off_real, off_fake, out / "figures")
     _tables(M, out / "tables")
     return M
+
+
+def _profile(ax, x, yr, yf, edges, ylabel, xlabel, log=True, frac=False):
+    xs, mr, mf, lr, hr, lf, hf = [], [], [], [], [], [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        s = (x >= lo) & (x < hi)
+        if s.sum() < 100: continue
+        xs.append(np.sqrt(lo * hi) if log else 0.5 * (lo + hi))
+        if frac:
+            mr.append(np.isfinite(yr[s]).mean()); mf.append(np.isfinite(yf[s]).mean())
+        else:
+            a = yr[s][np.isfinite(yr[s])]; b = yf[s][np.isfinite(yf[s])]
+            qa = np.percentile(a, [16, 50, 84]) if len(a) > 20 else [np.nan] * 3; qb = np.percentile(b, [16, 50, 84]) if len(b) > 20 else [np.nan] * 3
+            mr.append(qa[1]); lr.append(qa[0]); hr.append(qa[2]); mf.append(qb[1]); lf.append(qb[0]); hf.append(qb[2])
+    ax.plot(xs, mr, "o-", color=plots.PALETTE["real"], ms=4, label="MasterAnaDev"); ax.plot(xs, mf, "s--", color=plots.PALETTE["model"], ms=4, label="surrogate")
+    if not frac:
+        ax.fill_between(xs, lr, hr, color=plots.PALETTE["real"], alpha=0.15); ax.fill_between(xs, lf, hf, color=plots.PALETTE["model"], alpha=0.15)
+    if log: ax.set_xscale("log")
+    ax.set_xlabel(xlabel); ax.set_ylabel(ylabel); ax.legend(frameon=False)
+
+
+def _prong_validation(ke, lead_pP_r, lead_pP_f, Er, Ef, nch, lead_cls, Pr, Pf, pf_r, pf_f, offr, offf, fdir):
+    """Truth-conditional hadron validation in physical units. Returns a dict of the plotted numbers."""
+    out = {}
+    edges = np.array([50, 80, 120, 180, 270, 400, 600, 900, 1400, 2500])
+    fig, axs = plots.plt.subplots(1, 3, figsize=(11, 3.2))
+    _profile(axs[0], ke, lead_pP_r, lead_pP_f, edges, "fraction of events with a proton fit", "true leading proton KE [MeV]", frac=True)
+    _profile(axs[1], ke, lead_pP_r, lead_pP_f, edges, "leading proton-hypothesis P [MeV]", "true leading proton KE [MeV]")
+    axs[1].set_yscale("log")
+    if nch is not None:
+        rows = []
+        for k in range(0, 7):
+            s = nch == k
+            if s.sum() > 100: rows.append((k, Er[s, 1].mean(), Ef[s, 1].mean(), Er[s, 0].mean(), Ef[s, 0].mean(), int(s.sum())))
+        out["prongs_vs_true_charged"] = rows
+        axs[2].plot([r[0] for r in rows], [r[3] for r in rows], "o-", color=plots.PALETTE["real"], ms=4, label="MasterAnaDev, all prongs")
+        axs[2].plot([r[0] for r in rows], [r[4] for r in rows], "s--", color=plots.PALETTE["model"], ms=4, label="surrogate, all prongs")
+        axs[2].plot([r[0] for r in rows], [r[1] for r in rows], "o-", color=plots.PALETTE["third"], ms=4, label="MasterAnaDev, with kinematics")
+        axs[2].plot([r[0] for r in rows], [r[2] for r in rows], "s--", color=plots.PALETTE["fourth"], ms=4, label="surrogate, with kinematics")
+        axs[2].set_xlabel("true charged hadrons (p, pi, K) after FSI"); axs[2].set_ylabel("mean reco prongs per event"); axs[2].legend(frameon=False, fontsize=7)
+    plots.save(fig, fdir / "m3_prong_conditionals.png")
+    # PID: proton score of prongs in events whose leading true hadron is a proton vs a charged pion; P in MeV
+    seg_r = np.repeat(np.arange(len(offr) - 1), np.diff(offr)); seg_f = np.repeat(np.arange(len(offf) - 1), np.diff(offf))
+    is_p_r, is_p_f = lead_cls[seg_r] == 4, lead_cls[seg_f] == 4
+    is_pi_r, is_pi_f = np.isin(lead_cls[seg_r], [5, 6]), np.isin(lead_cls[seg_f], [5, 6])
+    fig, axs = plots.plt.subplots(1, 3, figsize=(11, 3.2))
+    b = np.linspace(0, 1, 40)
+    axs[0].hist(Pr[pf_r & is_p_r, 6], bins=b, histtype="step", color=plots.PALETTE["real"], density=True, label="MasterAnaDev, leading true p")
+    axs[0].hist(Pf[pf_f & is_p_f, 6], bins=b, histtype="step", color=plots.PALETTE["model"], density=True, ls="--", label="surrogate, leading true p")
+    axs[0].hist(Pr[pf_r & is_pi_r, 6], bins=b, histtype="step", color=plots.PALETTE["third"], density=True, label=r"MasterAnaDev, leading true $\pi^\pm$")
+    axs[0].hist(Pf[pf_f & is_pi_f, 6], bins=b, histtype="step", color=plots.PALETTE["fourth"], density=True, ls="--", label=r"surrogate, leading true $\pi^\pm$")
+    axs[0].set_xlabel("proton score1 of prongs with a proton fit"); axs[0].set_ylabel("density"); axs[0].legend(frameon=False, fontsize=7)
+    kin_r, kin_f = Pr[:, 2] > 0.5, Pf[:, 2] > 0.5
+    plots.hist_compare(axs[1], Pr[kin_r & (Pr[:, 3] > 0), 3], Pf[kin_f, 3], np.linspace(0, 1500, 60), "pion-hypothesis P [MeV]", ("MasterAnaDev", "surrogate"))
+    plots.hist_compare(axs[2], np.degrees(Pr[kin_r, 0]), np.degrees(Pf[kin_f, 0]), np.linspace(0, 180, 60), "prong angle to beam [deg]", ("MasterAnaDev", "surrogate")); axs[2].set_yscale("log")
+    plots.save(fig, fdir / "m3_prong_pid.png")
+    out["score_medians"] = {"lead_p_real": float(np.median(Pr[pf_r & is_p_r, 6])), "lead_p_fake": float(np.median(Pf[pf_f & is_p_f, 6])),
+                            "lead_pi_real": float(np.median(Pr[pf_r & is_pi_r, 6])), "lead_pi_fake": float(np.median(Pf[pf_f & is_pi_f, 6]))}
+    return out
 
 
 def _figures(M, Pr, Pf, kr, kf, pr, pf, Er, Ef, offr, offf, fdir):

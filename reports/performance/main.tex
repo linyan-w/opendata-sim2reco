@@ -26,6 +26,11 @@ one-dimensional marginals agree to a Wasserstein distance below 0.06 in standard
 remaining discrepancies and the parts of the tuple that are derived rather than generated.
 \end{abstract}
 
+\tableofcontents
+\listoffigures
+\listoftables
+\clearpage
+
 \section{Setup}
 \label{sec:setup}
 
@@ -55,9 +60,14 @@ response is right \emph{given} the truth, not only on average.
 \section{Model}
 \label{sec:model}
 
-Figure~\ref{fig:schematic} shows the architecture. A transformer set encoder over the particle tokens, with a
-global token carrying the context, produces an event embedding $z$ and per-particle states $h_i$. Four groups of
-heads read them, and are sampled in order: (i) classification heads for the reconstruction flag, the MINOS match,
+Figure~\ref{fig:schematic} shows the architecture. One transformer set encoder over the particle tokens, with a
+global token carrying the context, produces an event embedding $z$ and per-particle states $h_i$; every other
+component is a head on these outputs, and the whole model is trained jointly with teacher forcing (each head
+sees the true values of the quantities it is conditioned on). At sampling time the heads are hierarchical: the
+hadron multiplicity $N$ is drawn first, and the prong kinematics are then generated for exactly $N$ prongs. The
+prong generator is itself a second, smaller transformer over the $N$ prong tokens, so the model is not a single
+transformer with output layers but an encoder followed by MLP heads, an MLP-based flow and a set-transformer
+flow. The four groups of heads, in sampling order, are: (i) classification heads for the reconstruction flag, the MINOS match,
 the muon charge and the prong multiplicity $N$; (ii) a vertex-plane head, because the reconstructed vertex $z$
 lies exactly on one of about 200 scintillator-plane positions 22\,mm apart for 69\% of events, which predicts
 ``not snapped'', ``snapped to the plane nearest the true $z$ plus $\delta\in[-3,3]$'' or ``snapped to a farther
@@ -185,6 +195,40 @@ proton score are reproduced to $W_1 \le 0.006$ (Fig.~\ref{fig:prongs}), and the 
 counts of prongs by category to within one per cent (Fig.~\ref{fig:prong-event}). No prong-to-true-particle
 correspondence is generated; the flow learns the prong set given the particle set and any assignment lives
 implicitly in the cross-attention.
+
+Closure AUCs summarise agreement but hide what the hadron output looks like, so Figures~\ref{fig:prong-cond}
+and~\ref{fig:prong-pid} compare physical quantities against the truth. The fraction of events with a proton fit
+rises from 22\% at a true leading-proton kinetic energy of 50--80\,MeV to 54\% at 300--400\,MeV and falls again
+for protons above 1\,GeV, which increasingly exit or interact; the surrogate follows this curve to within one
+per cent everywhere except the highest bin (47\% versus 46\%). The reconstructed proton-hypothesis momentum of
+the leading prong tracks the truth in median and in the 16--84\% band over the same range. The mean number of
+reconstructed prongs versus the true number of charged hadrons after FSI (Fig.~\ref{fig:prong-cond}, right)
+shows the saturation of the reconstruction: it rises from 0.57 at one charged hadron to 0.93 at four and turns
+over to 0.80 at six, and the surrogate reproduces the whole shape, including the separate curve for prongs
+that carry kinematics, to within 0.01 prongs above one hadron; at zero true charged hadrons (2,524 events,
+where every prong is a fake from a neutron, photon or overlay) the surrogate gives 0.59 against 0.61.
+Figure~\ref{fig:prong-pid} tests particle identification: the proton score of prongs in events whose leading
+true hadron is a proton peaks at zero but has a shoulder at 0.8 that is absent for pion-led events, and the
+surrogate reproduces both shapes (medians 0.26 versus 0.23 for proton-led, 0.077 versus
+0.079 for pion-led). The same figure shows the pion-hypothesis momentum in MeV and the prong angle to the
+beam in degrees, where the backward population above 90$^\circ$ and the dip at 90$^\circ$ from the planar
+tracking are both present in the surrogate.
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{../m3/figures/m3_prong_conditionals.png}
+\caption{Hadron validation against the truth. Left: fraction of events with at least one proton fit versus the
+true leading-proton kinetic energy. Centre: proton-hypothesis momentum of the leading prong versus the same,
+median and 16--84\% band. Right: mean number of reconstructed prongs (all, and with kinematics) versus the true
+number of charged hadrons after FSI.}
+\label{fig:prong-cond}
+\end{figure}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{../m3/figures/m3_prong_pid.png}
+\caption{Left: proton score of prongs with a proton fit, for events whose leading true hadron is a proton or a
+charged pion. Centre: pion-hypothesis momentum. Right: prong angle to the beam.}
+\label{fig:prong-pid}
+\end{figure}
 
 \begin{table}[h]\centering
 \input{../m3/tables/prongs.tex}

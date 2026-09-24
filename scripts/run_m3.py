@@ -10,7 +10,7 @@ if __name__ == "__main__":
     ap.add_argument("out_dir"); ap.add_argument("--slim-dir", default="data/slim"); ap.add_argument("--n-files", type=int, default=None)
     ap.add_argument("--epochs", type=int, default=12); ap.add_argument("--bs", type=int, default=1024); ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--init", default="reports/m2/model.pt"); ap.add_argument("--eval-only", action="store_true"); ap.add_argument("--steps", type=int, default=64)
-    ap.add_argument("--m1", default="reports/m1/metrics.json")
+    ap.add_argument("--m1", default="reports/m1/metrics.json"); ap.add_argument("--tier2-only", action="store_true")
     a = ap.parse_args()
     from sim2reco.train import m2, m3
     from sim2reco.data.compact import load_compact
@@ -27,6 +27,9 @@ if __name__ == "__main__":
         model, tf, ptf = m3.load_model(pathlib.Path(a.out_dir) / "model.pt")
     m2.write_data_table(stems, d, split, a.out_dir, None if a.eval_only else a.epochs, sum(p.numel() for p in model.parameters()))
     m1 = json.load(open(a.m1)) if pathlib.Path(a.m1).exists() else None
+    if a.tier2_only:
+        M2 = m3.evaluate_tier2(model, tf, ptf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps)
+        print(json.dumps({"closure_prongs": M2["closure_prongs"], "validation": M2["validation"]}, indent=1, default=float)); sys.exit(0)
     M1 = m2.evaluate(model, tf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps, m1_metrics=m1)
     M2 = m3.evaluate_tier2(model, tf, ptf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps)
     print(json.dumps({"tier0": {k: round(v["logloss"], 4) for k, v in M1["tier0"].items()}, "auc_marginal": round(M1["classifier_auc_marginal"], 4), "auc_conditional": round(M1["classifier_auc_conditional"], 4),
