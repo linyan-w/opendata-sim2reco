@@ -41,8 +41,12 @@ def test_vertex_plane_table():
     assert abs(len(tab.z) - 60) <= 2
     cls = tab.classify(reco_z, true_z)
     assert (cls[snap] > 0).mean() > 0.98 and (cls[~snap] == 0).mean() > 0.95
-    zz = tab.z_for_class(cls, true_z)
+    zz = tab.z_for_class(cls, true_z, reco_z)
     assert np.allclose(zz[cls > 0], reco_z[cls > 0], atol=0.2)
+    # far-snapped events get class 8 and decode to the plane nearest the continuous z
+    sel = tab.nearest(true_z) + 6 < len(tab.z)
+    far = tab.classify(tab.z[tab.nearest(true_z[sel]) + 6], true_z[sel])
+    assert (far == 8).all()
 
 
 def test_surrogate_tier2_forward_and_sample():
@@ -53,7 +57,7 @@ def test_surrogate_tier2_forward_and_sample():
         items.append((np.random.randint(1, 12, k).astype(np.int8), (np.random.randn(k, 3) * 500).astype(np.float32),
                       np.array([0, 0, 6000, 6, 12], np.float32), np.array([1, 1, 1], np.float32), np.int8(npr),
                       np.random.randn(9).astype(np.float32), np.array([0, 0, 4000], np.float32), np.float32(1.0),
-                      np.random.randn(npr, 10).astype(np.float32), np.int64(i % 8)))
+                      np.random.randn(npr, 10).astype(np.float32), np.int64(i % 9), np.float32(0.3)))
     b = collate(items)
     assert b["prongs"].shape[1] == 2 and b["pmask"].sum() == sum(i % 3 for i in range(B))
     m = Surrogate(d_model=32, n_heads=4, n_layers=1, flow_hidden=64, flow_layers=2, tier2=True, prong_layers=1)

@@ -5,7 +5,7 @@ reconstructed variables, trained on the [MINERvA open data](https://minerva.fnal
 extrapolate to final states the released MC does not cover (alternative generators, higher multiplicity, new
 kinematic regions).
 
-Status: M0 (data pipeline), M1 (baselines) and M2 (set encoder + flow-matching surrogate, closure AUC 0.57) done; M3 prong set model in progress; M4 extrapolation study after. Read [`docs/PROJECT.md`](docs/PROJECT.md) first; performance numbers are in `reports/performance/` (LaTeX, compiled with tectonic).
+Status: M0 (data pipeline), M1 (baselines) and M2 (set encoder + flow-matching surrogate, closure AUC 0.57) done; M3 (prong set model + vertex-plane head) done; M4 extrapolation study next. Read [`docs/PROJECT.md`](docs/PROJECT.md) first; performance numbers are in `reports/performance/` (LaTeX, compiled with tectonic).
 
 ## Model schematic
 
@@ -24,7 +24,8 @@ python scripts/slim.py data/slim some_local_file.root      # same for a local RO
 python scripts/dataset_summary.py data/slim/MasterAnaDev_mc_AnaTuple_run00113069_Playlist
 python scripts/run_m1.py data/slim/MasterAnaDev_mc_AnaTuple_run00113069_Playlist reports/m1   # baselines, ~1 min on a GPU
 python scripts/run_m2.py reports/m2 --epochs 30                                         # surrogate, ~2 h on an RTX 3090, all files in data/slim
-python scripts/surrogate_to_ntuple.py reports/m2 data/slim/<stem>.truth.parquet out.root  # truth -> pruned MasterAnaDev ntuple
+python scripts/run_m3.py reports/m3 --epochs 12 --init reports/m2/model.pt                 # prong model, warm start from M2
+python scripts/surrogate_to_ntuple.py reports/m3 data/slim/<stem>.truth.parquet out.root  # truth -> full pruned MasterAnaDev ntuple
 pytest -q                                                  # round-trip tests (ROOT file or its slimmed Parquet)
 (cd reports/performance && tectonic -X compile main.tex)   # performance report PDF
 ```

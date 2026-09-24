@@ -12,7 +12,7 @@ from .prongflow import ProngFlow
 N_PRONG_CLASSES = 9  # 0..8
 TIER1_DIM = 9  # MODEL_COLS of sim2reco.data.compact
 PRONG_DIM = 10  # sim2reco.data.prongs_tf.PRONG_DIM
-N_VTX_CLASSES = 8  # sim2reco.data.prongs_tf.VertexPlaneTable.N_CLASSES
+N_VTX_CLASSES = 9  # sim2reco.data.prongs_tf.VertexPlaneTable.N_CLASSES
 PRONG_DIM_CAP = 8  # sim2reco.data.compact.N_PRONG_CAP
 
 
@@ -29,7 +29,8 @@ class Surrogate(nn.Module):
         self.tier2 = tier2
         if tier2:
             # vertex-plane class head (unsnapped / snapped to nearest plane + delta) on z, flags and N
-            self.vtx = nn.Sequential(nn.Linear(d_model + 64, d_model), nn.SiLU(), nn.Linear(d_model, N_VTX_CLASSES))
+            # input: flow conditioning + the phase of the true z within the plane cycle (+ sin/cos of it)
+            self.vtx = nn.Sequential(nn.Linear(d_model + 64 + 3, d_model), nn.SiLU(), nn.Linear(d_model, d_model), nn.SiLU(), nn.Linear(d_model, N_VTX_CLASSES))
             # prong set flow, conditioned on z, flags, N, and the Tier 1 vector; cross-attends particle tokens
             self.prong = ProngFlow(PRONG_DIM, d_model, d_model + 64 + TIER1_DIM, prong_layers)
 
@@ -39,6 +40,10 @@ class Surrogate(nn.Module):
 
     def flow_cond(self, z, flags, nprong):
         return torch.cat([z, self.flag_emb(flags), self.n_emb(nprong.clamp(0, N_PRONG_CLASSES - 1))], -1)
+
+    def vtx_logits(self, cond, phase):
+        ph = phase[:, None] * 3.14159265
+        return self.vtx(torch.cat([cond, phase[:, None], ph.sin(), ph.cos()], -1))
 
     def losses(self, b):
         z, h = self.encode(b, return_tokens=True)
@@ -53,7 +58,7 @@ class Surrogate(nn.Module):
         l_flow = self.flow.loss(b["x1"][fl], cond).mean() if fl.any() else logits.sum() * 0
         out = {"exist": l_exist, "minos": l_minos, "charge": l_charge, "card": l_card, "flow": l_flow}
         if self.tier2:
-            out["vtx"] = F.cross_entropy(self.vtx(cond), b["vclass"][fl]) if fl.any() else logits.sum() * 0
+            out["vtx"] = F.cross_entropy(self.vtx_logits(cond, b["vphase"][fl]), b["vclass"][fl]) if fl.any() else logits.sum() * 0
             pm = b["pmask"][fl]; has = pm.any(1)
             if has.any():
                 pc = torch.cat([cond[has], b["x1"][fl][has]], -1)
@@ -85,7 +90,7 @@ class Surrogate(nn.Module):
         x1 = self.flow.sample(cond, n_steps)
         out = {"exist": exist, "minos": flags[:, 0] > 0, "charge": flags[:, 1] > 0, "nprong": nprong, "x1": x1, "p0": p0, "pn": pn}
         if self.tier2:
-            pv = F.softmax(self.vtx(cond), -1)
+            pv = F.softmax(self.vtx_logits(cond, b["vphase"]), -1)
             out["vclass"] = torch.multinomial(pv, 1)[:, 0]; out["pv"] = pv
             _, h = self.encode(b, return_tokens=True)
             N = int(min(nprong.max().item(), PRONG_DIM_CAP)) if len(nprong) else 0

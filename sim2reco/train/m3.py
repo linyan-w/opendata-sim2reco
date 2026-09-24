@@ -53,7 +53,9 @@ def train(stems, out_dir, init_from="reports/m2/model.pt", epochs=12, bs=1024, l
     print(f"data: {len(split)} events, {d['p_offsets'][-1]} prongs, {len(tf.planes.z)} vertex planes, {time.time()-t0:.0f} s", flush=True)
     ck = torch.load(init_from, map_location=device, weights_only=False); c = ck["config"]
     model = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=prong_layers).to(device)
-    missing, unexpected = model.load_state_dict(ck["model"], strict=False)
+    own = model.state_dict()
+    sd = {k: v for k, v in ck["model"].items() if k in own and own[k].shape == v.shape}  # skip re-shaped heads
+    missing, unexpected = model.load_state_dict(sd, strict=False)
     print(f"warm start from {init_from}: {len(missing)} new tensors (vtx head + prong flow), {len(unexpected)} unexpected", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     steps = epochs * len(ld["train"])
@@ -120,10 +122,10 @@ def evaluate_tier2(model, tf, ptf, d, idx_test, ld_test, out_dir, device="cuda",
     # ---- vertex class ----
     vc_real = tf.planes.classify(d["tier1"][ir, 5], d["ctx"][ir, 2])
     M["vertex_class"] = multiclass_metrics(vc_real, PV[reco]); M["vertex_class"]["snapped_frac_real"] = float((vc_real > 0).mean()); M["vertex_class"]["snapped_frac_sampled"] = float((VC[reco] > 0).mean())
-    M["vertex_class"]["marginal_real"] = np.bincount(vc_real, minlength=8).tolist(); M["vertex_class"]["marginal_sampled"] = np.bincount(VC[reco], minlength=8).tolist()
+    M["vertex_class"]["marginal_real"] = np.bincount(vc_real, minlength=9).tolist(); M["vertex_class"]["marginal_sampled"] = np.bincount(VC[reco], minlength=9).tolist()
     # decoded reco z: snapped -> plane, else flow residual
     y_fake = tf.inverse(X1[reco], d["mu_true"][ir], d["ctx"][ir])
-    zsnap = tf.planes.z_for_class(VC[reco], d["ctx"][ir, 2]); z_fake = np.where(VC[reco] > 0, zsnap, y_fake[:, 5]); z_real = d["tier1"][ir, 5]
+    zsnap = tf.planes.z_for_class(VC[reco], d["ctx"][ir, 2], y_fake[:, 5]); z_fake = np.where(VC[reco] > 0, zsnap, y_fake[:, 5]); z_real = d["tier1"][ir, 5]
     off_real = z_real - tf.planes.z[tf.planes.nearest(z_real)]; off_fake = z_fake - tf.planes.z[tf.planes.nearest(z_fake)]
     M["vertex_offset_to_nearest_plane"] = {"real_frac_within_0.1mm": float((np.abs(off_real) < 0.1).mean()), "fake_frac_within_0.1mm": float((np.abs(off_fake) < 0.1).mean()),
                                            "w1_mm": sample_vs_real_1d(off_real, off_fake, -15, 15)["w1"]}
@@ -178,7 +180,7 @@ def _figures(M, Pr, Pf, kr, kf, pr, pf, Er, Ef, offr, offf, fdir):
     plots.save(fig, fdir / "m3_prong_event.png")
     fig, axs = plots.plt.subplots(1, 2, figsize=(7.5, 3.2))
     plots.hist_compare(axs[0], offr, offf, np.linspace(-15, 15, 121), "reco vertex z - nearest plane [mm]", ("MasterAnaDev", "surrogate")); axs[0].set_yscale("log")
-    plots.bar_compare(axs[1], np.array(M["vertex_class"]["marginal_real"]), np.array(M["vertex_class"]["marginal_sampled"]), "vertex class (0 = unsnapped, 4 = nearest plane)", ("MasterAnaDev", "surrogate"))
+    plots.bar_compare(axs[1], np.array(M["vertex_class"]["marginal_real"]), np.array(M["vertex_class"]["marginal_sampled"]), "vertex class (0 unsnapped, 4 nearest plane, 8 far plane)", ("MasterAnaDev", "surrogate"))
     plots.save(fig, fdir / "m3_vertex.png")
 
 

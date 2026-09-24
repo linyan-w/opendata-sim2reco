@@ -114,5 +114,6 @@ All verified by exact round trip on 20k reco events (`tests/`).
 - **`MasterAnaDev_recoil_passivecorrected` = 0.6669 x `recoil_E` exactly for > 15% of events** (84th and 99th percentile
   of the ratio coincide), 0.62-0.67 otherwise depending on vertex z; **`MasterAnaDev_hadron_recoil` = 1.385 x
   `recoil_E`** to within a MeV for a large fraction. Both are calibrations of one number, not independent responses.
-- **Reconstructed vertex z snaps to plane positions** for roughly a third of events (in a 10 mm slice of true z near
-  7000 mm, 111 of 331 reco vertices are at exactly 7007.0 mm). The z residual conditional on truth is a comb.
+- **Reconstructed vertex z snaps to plane positions** for 69% of events (about 196 distinct positions 22.1 mm apart in
+  the 32-file sample); 55% land within 3 planes of the true z, 14% on a plane further away. The z residual conditional
+  on truth is a comb; which plane is chosen depends on the true z's phase within the plane cycle.

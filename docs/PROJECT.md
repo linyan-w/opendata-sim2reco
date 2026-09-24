@@ -293,7 +293,7 @@ directly useful for validation. Start with flow matching for both tiers to keep 
 | M0 ✅ | Slimming (local or streamed from xrootd), Parquet dataset, prong table round trip, tests | Done 2026-09-23: 300 MB Parquet per 20 GB file, loads in 2 s, exact round trip |
 | M1 ✅ | Baselines: GBDT efficiency / MINOS / charge / multiplicity, MDN muon response + recoil | Done 2026-09-23: `reports/m1/`, `reports/performance/main.tex` |
 | M2 ✅ | Set encoder + Tier 0/cardinality heads + 9-d flow matching, 32 files, subrun split | Done 2026-09-23: heads beat M1 on all targets; closure AUC 0.57 marginal / 0.62 conditional (vertex-z plane snapping is the residual). `scripts/surrogate_to_ntuple.py` writes the pruned ntuple. |
-| M3 🔶 | Tier 2 prong set model (masked set flow matching, cross-attending the particle tokens) + discrete vertex-plane head | Reproduces prong kinematics, prong-count confusion, and closes the block-wise classifiers; full pruned ntuple |
+| M3 ✅ | Tier 2 prong set model (masked set flow matching, cross-attending the particle tokens) + discrete vertex-plane head | Done 2026-09-24: prong closure AUC 0.52 / 0.51; Tier 1 closure 0.534 / 0.534; vertex comb reproduced; full 80-branch pruned ntuple |
 | M4 | Physics-holdout extrapolation study (§7), ensemble OOD score. Reordered after M3 on 2026-09-24: extrapolation is mostly about hadrons, so it needs the prong model first. | Written report of where it works and where it does not |
 | M5 | First application: alternative-generator truth → surrogate reco → comparison to open data | Paper-quality reco-level comparison |
 
@@ -450,3 +450,16 @@ Branches that are constant or unfilled in this sample (`blob_ccqe_recoil_E`, `EM
   in `sim2reco/data/compact.py` and documented in `docs/tuple_notes.md`.
 - **Method.** Block-wise and truth-conditional closure classifiers were decisive; marginal histograms hid every defect.
   Full record of the four iterations in `reports/performance/discussion_m2_iterations.tex`.
+
+## 16. M3 findings (2026-09-24)
+
+- **Prong set flow closes at the first attempt:** prong marginals $W_1 \le 0.006$, category fractions within 0.3%,
+  event-level prong-summary closure AUC 0.516 (0.511 with truth). The permutation-equivariant set flow with
+  cross-attention to the particle tokens needs no ordering or matching.
+- **Vertex comb:** 69% of reco vertices sit on a plane; 14% on a plane more than 3 planes from the true z. Nine classes
+  (unsnapped, δ ∈ [-3, 3], far) plus an explicit *phase* feature (true z offset within the 22 mm plane cycle) were needed;
+  the encoder cannot resolve that periodicity from raw z. Truth-conditional vertex test 0.578 → 0.547.
+- **Tier 1 improved as a side effect** (snapped z dequantised for the flow): closure 0.57 / 0.62 → 0.534 / 0.534; the
+  M2 exit criterion is now met in both forms.
+- **No prong-to-truth correspondence** is produced (implicit in attention); a per-prong pointer head is the next addition
+  if needed. Extrapolation study (M4) can now start on the complete interface.
