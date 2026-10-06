@@ -26,7 +26,7 @@ def aucs(idx, model, tf, ptf, seed):
     x_real = x_real_all[sel]; x_fake = S[sel, 3:]; rv = idx[sel]; cls_p, mom_p, mask_p = _pad(d, rv); X, _ = event_features(cls_p, mom_p, mask_p, d["ctx"][rv]); t0 = d["tier0"][rv]
     Xr = np.concatenate([X, t0[:, 1:3], d["nprong"][rv][:, None], x_real], 1); Xf = np.concatenate([X, S[sel, :2], S[sel, 2:3], x_fake], 1)
     y = np.r_[np.ones(len(Xr)), np.zeros(len(Xf))]; rng = np.random.default_rng(seed); perm = rng.permutation(len(y)); half = len(perm) // 2; out = {}
-    for name, cols in (("all", ALL), ("ccinc", CI)):
+    for name, cols in (("all", ALL), ("ccinc", CI), ("mu", [0, 1, 2]), ("vtx", [3, 4, 5]), ("recoil", [6])):
         Xm = np.concatenate([x_real[:, cols], x_fake[:, cols]]); c = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.05, max_leaf_nodes=31, early_stopping=True, random_state=seed).fit(Xm[perm[:half]], y[perm[:half]])
         out[f"{name}_marg"] = float(roc_auc_score(y[perm[half:]], c.predict_proba(Xm[perm[half:]])[:, 1]))
         nX = X.shape[1] + 3; keep = list(range(nX)) + [nX + j for j in cols]; Xc = np.concatenate([Xr, Xf])[:, keep]
@@ -36,9 +36,9 @@ def aucs(idx, model, tf, ptf, seed):
 R = {}; M = {}
 for tag, D in (("A", a.a), ("B", a.b)):
     model, tf, ptf = load_model(f"{D}/model.pt")
-    for sname, idx in (("full", te), ("twop", te[d["intType"][te] == 8])):
+    for sname, idx in (("full", te), ("twop", te[d["intType"][te] == 8])) + ((("ctl", te[d["intType"][te] != 8]),) if tag == "B" else ()):
         r, n = aucs(idx, model, tf, ptf, a.seed); R[f"{tag}_{sname}"] = dict(r, n=n); print(tag, sname, n, {k: round(v, 4) for k, v in r.items()}, flush=True)
-        for k, v in r.items(): M[f"nCL{tag}{'Full' if sname == 'full' else 'TwoP'}{k.replace('_marg', 'Marg').replace('_cond', 'Cond').replace('all', 'All').replace('ccinc', 'CI')}"] = f"{v:.3f}"
+        for k, v in r.items(): M[f"nCL{tag}{ {'full': 'Full', 'twop': 'TwoP', 'ctl': 'Ctl'}[sname] }{k.replace('_marg', 'Marg').replace('_cond', 'Cond').replace('all', 'All').replace('ccinc', 'CI').replace('mu', 'Mu').replace('vtx', 'Vtx').replace('recoil', 'Recoil')}"] = f"{v:.3f}"
 out = pathlib.Path(a.out); (out / "tables").mkdir(exist_ok=True)
 tex = ("\\begin{tabular}{lcccc}\n\\toprule\n & \\multicolumn{2}{c}{all nine variables} & \\multicolumn{2}{c}{non-calorimetry set (muon, vertex, recoil)} \\\\\n & marginal & + truth & marginal & + truth \\\\\n\\midrule\n"
        + "\n".join(f"{lab} & {R[k]['all_marg']:.3f} & {R[k]['all_cond']:.3f} & {R[k]['ccinc_marg']:.3f} & {R[k]['ccinc_cond']:.3f} \\\\" for k, lab in (("A_full", "model A, full test split"), ("B_full", "model B (2p2h blind), full test split"), ("A_twop", "model A, held-out 2p2h events"), ("B_twop", "model B, held-out 2p2h events")))
