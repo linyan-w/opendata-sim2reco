@@ -26,3 +26,8 @@ reports/pipeline_1A/*.log
 !reports/m2_1A_z_no2p2h/model.pt
 !reports/m3_1A_z/model.pt
 !reports/m3_1A_z_no2p2h/model.pt
+# all-events models (CC and NC, all flavours), A and B
+!reports/m2_1A_all/model.pt
+!reports/m2_1A_all_no2p2h/model.pt
+!reports/m3_1A_all/model.pt
+!reports/m3_1A_all_no2p2h/model.pt
