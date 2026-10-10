@@ -7,7 +7,7 @@ import argparse, glob, json, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import numpy as np, torch
 from sklearn.metrics import roc_auc_score
-from sim2reco.data.compact import load_compact, CompactDataset, collate
+from sim2reco.data.compact import selection_from_config, load_compact, CompactDataset, collate
 from sim2reco.data.dataset import split_by_subrun
 from sim2reco.train.m3 import load_model
 from sim2reco.train.m2 import to_dev
@@ -20,7 +20,7 @@ D = pathlib.Path(a.model); model, tf, ptf = load_model(D / "model.pt"); ck = tor
 post = {k: GaussianLastLayer.from_state(s, dev) for k, s in torch.load(D / "bayes_last.pt", map_location="cpu", weights_only=False).items()}
 layers = {k: head_layer(model, p) for k, (p, _) in heads_for(model).items()}; taps = {k: FeatureTap(l) for k, l in layers.items()}
 stems = sorted(p[:-len(".truth.parquet")] for p in glob.glob(f"{a.slim_dir}/*.truth.parquet"))
-d = load_compact(stems, ke_cut_mev=ck.get("ke_cut_mev", 50.0), keep_neutrons=ck.get("keep_neutrons", False)); split = split_by_subrun(d["subrun"], seed=0)
+d = load_compact(stems, **selection_from_config(ck)); split = split_by_subrun(d["subrun"], seed=0)
 idx = rng.permutation(np.where((split == 2) & ~np.isin(d["intType"], [8]))[0])[:a.n]
 ds = CompactDataset(d, idx, tf, 0, prong_tf=ptf); batches = [b for b in torch.utils.data.DataLoader(ds, batch_size=512, collate_fn=collate, num_workers=4)]
 

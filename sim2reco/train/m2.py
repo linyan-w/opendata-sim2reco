@@ -17,6 +17,7 @@ from ..eval import plots
 from ..eval.metrics import binary_metrics, calibration_by_bin, confusion, multiclass_metrics, sample_vs_real_1d
 from ..models.surrogate import Surrogate
 from ..prep.features import event_features
+from ..constants import N_CLASSES, N_CLASSES_CCNUMU
 
 
 def make_loaders(d, split, tf, bs, seed, workers=4, bucket=True):
@@ -51,11 +52,11 @@ def apply_holdout(d, split, exclude_inttype):
 
 def train(stems, out_dir, epochs=20, bs=1024, lr=3e-4, seed=0, device="cuda", d_model=128, n_layers=4,
           flow_hidden=768, flow_layers=5, max_train_events=None, log_every=200, exclude_inttype=None,
-          ke_cut_mev=10.0, keep_neutrons=True, zero_flags=True, bucket=True):
+          ke_cut_mev=10.0, keep_neutrons=True, zero_flags=True, bucket=True, population="ccnumu"):
     out = pathlib.Path(out_dir); out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(seed); np.random.seed(seed)
     t0 = time.time()
-    d = load_compact(stems, ke_cut_mev=ke_cut_mev, keep_neutrons=keep_neutrons)
+    d = load_compact(stems, ke_cut_mev=ke_cut_mev, keep_neutrons=keep_neutrons, population=population)
     split = apply_holdout(d, split_by_subrun(d["subrun"], seed=seed), exclude_inttype)
     if max_train_events:
         tr = np.where(split == 0)[0]
@@ -67,7 +68,8 @@ def train(stems, out_dir, epochs=20, bs=1024, lr=3e-4, seed=0, device="cuda", d_
     print(f"data: {len(d['subrun'])} events ({(split==0).sum()} train / {(split==1).sum()} val / {(split==2).sum()} test), "
           f"{d['offsets'][-1]} particles, {time.time()-t0:.0f} s", flush=True)
 
-    model = Surrogate(d_model, 4, n_layers, flow_hidden, flow_layers, zero_flags=zero_flags).to(device)
+    n_classes = N_CLASSES if population == "all" else N_CLASSES_CCNUMU
+    model = Surrogate(d_model, 4, n_layers, flow_hidden, flow_layers, zero_flags=zero_flags, n_classes=n_classes).to(device)
     if zero_flags: model.zero_fill.copy_(torch.tensor(tf.zero_fill(), device=device)); model.zero_band = torch.tensor(tf.zero_band(), device=device)
     n_par = sum(p.numel() for p in model.parameters())
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
@@ -98,7 +100,7 @@ def train(stems, out_dir, epochs=20, bs=1024, lr=3e-4, seed=0, device="cuda", d_
         print(f"epoch {ep}: val " + " ".join(f"{k} {v:.4f}" for k, v in va.items()) + f"  total {tot:.4f}  [{rec['time']:.0f} s]", flush=True)
         if np.isfinite(tot) and tot < best:
             best = tot
-            torch.save({"model": model.state_dict(), "transform": tf.state(), "config": {"d_model": d_model, "n_layers": n_layers, "flow_hidden": flow_hidden, "flow_layers": flow_layers, "exclude_inttype": list(exclude_inttype or []), "ke_cut_mev": ke_cut_mev, "keep_neutrons": keep_neutrons, "zero_flags": zero_flags, "bucket": bucket}}, out / "model.pt")
+            torch.save({"model": model.state_dict(), "transform": tf.state(), "config": {"d_model": d_model, "n_layers": n_layers, "flow_hidden": flow_hidden, "flow_layers": flow_layers, "exclude_inttype": list(exclude_inttype or []), "ke_cut_mev": ke_cut_mev, "keep_neutrons": keep_neutrons, "zero_flags": zero_flags, "bucket": bucket, "population": population, "n_classes": n_classes}}, out / "model.pt")
     (out / "history.json").write_text(json.dumps(hist, indent=1))
     return d, split, tf, idx, ld, out
 
@@ -117,7 +119,7 @@ def write_data_table(stems, d, split, out_dir, epochs=None, n_params=None):
 
 def load_model(path, device="cuda"):
     ck = torch.load(path, map_location=device, weights_only=False)
-    c = ck["config"]; m = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], zero_flags=c.get("zero_flags", False)).to(device)
+    c = ck["config"]; m = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], zero_flags=c.get("zero_flags", False), n_classes=c.get("n_classes", N_CLASSES_CCNUMU)).to(device)
     m.load_state_dict(ck["model"], strict=False); m.eval()  # old checkpoints lack the zero_fill buffer
     tf = Tier1Transform.from_state(ck["transform"])
     if m.zero_flags: m.zero_band = torch.tensor(tf.zero_band(), device=device)

@@ -5,7 +5,7 @@ import argparse, glob, pathlib, sys, time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import numpy as np, torch
 from torch.utils.data import DataLoader
-from sim2reco.data.compact import load_compact, CompactDataset, collate
+from sim2reco.data.compact import selection_from_config, load_compact, CompactDataset, collate
 from sim2reco.data.dataset import split_by_subrun
 from sim2reco.train.m3 import load_model
 from sim2reco.train.m2 import to_dev, apply_holdout
@@ -15,7 +15,7 @@ ap = argparse.ArgumentParser(); ap.add_argument("model_dir"); ap.add_argument("-
 a = ap.parse_args(); D = pathlib.Path(a.model_dir); dev = "cuda"
 model, tf, ptf = load_model(D / "model.pt"); ck = torch.load(D / "model.pt", map_location="cpu", weights_only=False)["config"]
 stems = sorted(p[:-len(".truth.parquet")] for p in glob.glob(f"{a.slim_dir}/*.truth.parquet"))
-d = load_compact(stems, ke_cut_mev=ck.get("ke_cut_mev", 50.0), keep_neutrons=ck.get("keep_neutrons", False))
+d = load_compact(stems, **selection_from_config(ck))
 split = apply_holdout(d, split_by_subrun(d["subrun"], seed=0), ck.get("exclude_inttype") or None)
 tr = np.where(split == 0)[0]; rng = np.random.default_rng(0); tr = rng.permutation(tr)[:a.max_events]
 ds = CompactDataset(d, tr, tf, 0, prong_tf=ptf); ld = DataLoader(ds, batch_size=2048, collate_fn=collate, num_workers=4)

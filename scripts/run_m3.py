@@ -10,26 +10,28 @@ if __name__ == "__main__":
     ap.add_argument("out_dir"); ap.add_argument("--slim-dir", default="data/slim_1A"); ap.add_argument("--n-files", type=int, default=None)
     ap.add_argument("--epochs", type=int, default=12); ap.add_argument("--bs", type=int, default=1024); ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--init", default="reports/m2_1A/model.pt"); ap.add_argument("--eval-only", action="store_true"); ap.add_argument("--steps", type=int, default=64)
-    ap.add_argument("--m1", default="reports/m1_1A/metrics.json"); ap.add_argument("--exclude-inttype", type=int, nargs="*", default=None, help="GENIE intType codes held out of train/val (8 = 2p2h)"); ap.add_argument("--only-inttype", type=int, nargs="*", default=None, help="evaluate only test events of these intType codes")
+    ap.add_argument("--m1", default="reports/m1_1A/metrics.json"); ap.add_argument("--exclude-inttype", type=int, nargs="*", default=None, help="GENIE intType codes held out of train/val (8 = 2p2h)"); ap.add_argument("--only-inttype", type=int, nargs="*", default=None, help="evaluate only test events of these intType codes"); ap.add_argument("--subset", choices=["ccnumu", "nc", "other"], default=None, help="all-events models: evaluate only this subset of the test events")
     ap.add_argument("--ke-cut", type=float, default=10.0, help="hadron KE threshold [MeV] for input tokens"); ap.add_argument("--neutrons", dest="neutrons", action="store_true", default=True, help="admit neutrons as input tokens (default)"); ap.add_argument("--no-neutrons", dest="neutrons", action="store_false"); ap.add_argument("--tier2-only", action="store_true"); ap.add_argument("--max-test", type=int, default=None)
     a = ap.parse_args()
     from sim2reco.train import m2, m3
-    from sim2reco.data.compact import load_compact
+    from sim2reco.data.compact import load_compact, selection_from_config
     from sim2reco.data.dataset import split_by_subrun
     stems = sorted(p[:-len(".truth.parquet")] for p in glob.glob(f"{a.slim_dir}/*.truth.parquet"))
     if a.n_files: stems = stems[:a.n_files]
     def restrict(d, idx, ld, tf, ptf=None):
-        if not a.only_inttype: return idx, ld
+        if not a.only_inttype and not a.subset: return idx, ld
         from torch.utils.data import DataLoader
-        from sim2reco.data.compact import CompactDataset, collate
-        keep = idx["test"][np.isin(d["intType"][idx["test"]], a.only_inttype)]
+        from sim2reco.data.compact import CompactDataset, collate, subset_mask
+        keep = idx["test"]
+        if a.only_inttype: keep = keep[np.isin(d["intType"][keep], a.only_inttype)]
+        if a.subset: keep = keep[subset_mask(d, a.subset)[keep]]
         idx = dict(idx, test=keep); ld = dict(ld, test=DataLoader(CompactDataset(d, keep, tf, 0, prong_tf=ptf), batch_size=a.bs, collate_fn=collate, num_workers=4))
-        print(f"evaluating on {len(keep):,} test events of intType {a.only_inttype}"); return idx, ld
+        print(f"evaluating on {len(keep):,} test events (intType {a.only_inttype}, subset {a.subset})"); return idx, ld
     print(f"{len(stems)} files")
     if a.eval_only:
         import torch
         c = torch.load(pathlib.Path(a.out_dir) / "model.pt", map_location="cpu", weights_only=False)["config"]
-        d = load_compact(stems, ke_cut_mev=c.get("ke_cut_mev", 50.0), keep_neutrons=c.get("keep_neutrons", False)); split = split_by_subrun(d["subrun"], seed=0)
+        d = load_compact(stems, **selection_from_config(c)); split = split_by_subrun(d["subrun"], seed=0)
         model, tf, ptf = m3.load_model(pathlib.Path(a.out_dir) / "model.pt")
         idx, ds, ld = m3.make_loaders(d, split, tf, ptf, a.bs, 0)
         if a.max_test:  # quick checks on a subset of the test split

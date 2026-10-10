@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import roc_auc_score
 from scipy.stats import wasserstein_distance
-from sim2reco.data.compact import load_compact, CompactDataset, collate, MODEL_NAMES
+from sim2reco.data.compact import selection_from_config, load_compact, CompactDataset, collate, MODEL_NAMES
 from sim2reco.data.dataset import split_by_subrun
 from sim2reco.train.m3 import load_model
 from sim2reco.train.m2 import to_dev, _pad
@@ -24,7 +24,7 @@ a = ap.parse_args(); out = pathlib.Path(a.out_dir); out.mkdir(parents=True, exis
 stems = sorted(p[:-len(".truth.parquet")] for p in glob.glob(f"{a.slim_dir}/*.truth.parquet"))
 mA, tfA, ptfA = load_model(pathlib.Path(a.a) / "model.pt")
 ck = torch.load(pathlib.Path(a.a) / "model.pt", map_location="cpu", weights_only=False)["config"]
-d = load_compact(stems, ke_cut_mev=ck.get("ke_cut_mev", 50.0), keep_neutrons=ck.get("keep_neutrons", False))
+d = load_compact(stems, **selection_from_config(ck))
 split = split_by_subrun(d["subrun"], seed=0); te = np.where((split == 2) & np.isin(d["intType"], a.inttype))[0]
 reco = d["reco_exists"][te]; ir = te[reco]
 print(f"{len(te):,} held-out test events, {reco.sum():,} reconstructed", flush=True)

@@ -12,7 +12,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import numpy as np, torch
 from torch.utils.data import DataLoader
 from sklearn.metrics import roc_auc_score
-from sim2reco.data.compact import load_compact, CompactDataset, collate
+from sim2reco.data.compact import SUBSETS, subset_mask, selection_from_config, load_compact, CompactDataset, collate
 from sim2reco.data.dataset import split_by_subrun
 from sim2reco.train.m3 import load_model
 from sim2reco.train.m2 import to_dev, _pad
@@ -21,14 +21,14 @@ from sim2reco.prep.features import event_features
 from sim2reco.eval import plots
 
 ap = argparse.ArgumentParser(); ap.add_argument("out_dir"); ap.add_argument("--model", required=True); ap.add_argument("--slim-dir", default="data/slim_1A")
-ap.add_argument("--ood-inttype", type=int, nargs="*", default=[8]); ap.add_argument("--n-control", type=int, default=60000); ap.add_argument("--draws", type=int, default=10); ap.add_argument("--steps", type=int, default=64); ap.add_argument("--tag", default=""); ap.add_argument("--control-split", type=int, default=2, help="split the control sample is drawn from: 0 train, 1 val, 2 test")
+ap.add_argument("--ood-inttype", type=int, nargs="*", default=[8]); ap.add_argument("--n-control", type=int, default=60000); ap.add_argument("--draws", type=int, default=10); ap.add_argument("--steps", type=int, default=64); ap.add_argument("--tag", default=""); ap.add_argument("--control-split", type=int, default=2, help="split the control sample is drawn from: 0 train, 1 val, 2 test"); ap.add_argument("--control-subset", choices=SUBSETS, default=None, help="all-events models: restrict the control sample to one subset")
 a = ap.parse_args(); out = pathlib.Path(a.out_dir); (out / "figures").mkdir(parents=True, exist_ok=True); (out / "tables").mkdir(exist_ok=True); dev = "cuda"; rng = np.random.default_rng(0)
 D = pathlib.Path(a.model); model, tf, ptf = load_model(D / "model.pt"); ck = torch.load(D / "model.pt", map_location="cpu", weights_only=False)["config"]
 post = {k: GaussianLastLayer.from_state(s, dev) for k, s in torch.load(D / "bayes_last.pt", map_location="cpu", weights_only=False).items()}
 layers = {k: head_layer(model, p) for k, (p, _) in heads_for(model).items()}; taps = {k: FeatureTap(l) for k, l in layers.items()}
 stems = sorted(p[:-len(".truth.parquet")] for p in glob.glob(f"{a.slim_dir}/*.truth.parquet"))
-d = load_compact(stems, ke_cut_mev=ck.get("ke_cut_mev", 50.0), keep_neutrons=ck.get("keep_neutrons", False)); split = split_by_subrun(d["subrun"], seed=0)
-te = np.where(split == 2)[0]; ood = te[np.isin(d["intType"][te], a.ood_inttype)]; cs = np.where(split == a.control_split)[0]; ctl = rng.permutation(cs[~np.isin(d["intType"][cs], a.ood_inttype)])[:a.n_control]
+d = load_compact(stems, **selection_from_config(ck)); split = split_by_subrun(d["subrun"], seed=0)
+te = np.where(split == 2)[0]; ood = te[np.isin(d["intType"][te], a.ood_inttype)]; cs = np.where(split == a.control_split)[0]; cs = cs[subset_mask(d, a.control_subset)[cs]] if a.control_subset else cs; ctl = rng.permutation(cs[~np.isin(d["intType"][cs], a.ood_inttype)])[:a.n_control]
 print(f"OOD events {len(ood):,}, control {len(ctl):,}", flush=True)
 
 def flag_pass(idx):

@@ -44,18 +44,19 @@ def fit_transforms(d, split, seed):
 
 
 def train(stems, out_dir, init_from="reports/m2/model.pt", epochs=12, bs=1024, lr=2e-4, seed=0, device="cuda",
-          prong_layers=3, log_every=500, exclude_inttype=None, ke_cut_mev=None, keep_neutrons=None):
+          prong_layers=3, log_every=500, exclude_inttype=None, ke_cut_mev=None, keep_neutrons=None):  # selection inherited from the M2 model
     out = pathlib.Path(out_dir); out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(seed); np.random.seed(seed); t0 = time.time()
     ck0 = torch.load(init_from, map_location="cpu", weights_only=False)["config"]
     ke_cut_mev = ck0.get("ke_cut_mev", 50.0) if ke_cut_mev is None else ke_cut_mev  # old checkpoints predate the key   # inherit the M2 model's selection
     keep_neutrons = ck0.get("keep_neutrons", False) if keep_neutrons is None else keep_neutrons
-    d = load_compact(stems, ke_cut_mev=ke_cut_mev, keep_neutrons=keep_neutrons); split = m2.apply_holdout(d, split_by_subrun(d["subrun"], seed=seed), exclude_inttype)
+    population = ck0.get("population", "ccnumu")
+    d = load_compact(stems, ke_cut_mev=ke_cut_mev, keep_neutrons=keep_neutrons, population=population); split = m2.apply_holdout(d, split_by_subrun(d["subrun"], seed=seed), exclude_inttype)
     tf, ptf = fit_transforms(d, split, seed)
     idx, ds, ld = make_loaders(d, split, tf, ptf, bs, seed)
     print(f"data: {len(split)} events, {d['p_offsets'][-1]} prongs, {len(tf.planes.z)} vertex planes, {time.time()-t0:.0f} s", flush=True)
     ck = torch.load(init_from, map_location=device, weights_only=False); c = ck["config"]
-    model = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=prong_layers, zero_flags=c.get("zero_flags", False)).to(device)
+    model = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=prong_layers, zero_flags=c.get("zero_flags", False), n_classes=c.get("n_classes", 13)).to(device)
     if model.zero_flags: model.zero_fill.copy_(torch.tensor(tf.zero_fill(), device=device)); model.zero_band = torch.tensor(tf.zero_band(), device=device)  # the M3 transform is refitted
     own = model.state_dict()
     sd = {k: v for k, v in ck["model"].items() if k in own and own[k].shape == v.shape and k != "zero_fill"}  # skip re-shaped heads; keep the refitted zero_fill
@@ -89,7 +90,7 @@ def train(stems, out_dir, init_from="reports/m2/model.pt", epochs=12, bs=1024, l
 
 def load_model(path, device="cuda"):
     ck = torch.load(path, map_location=device, weights_only=False); c = ck["config"]
-    m = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=c.get("prong_layers", 3), zero_flags=c.get("zero_flags", False)).to(device)
+    m = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=c.get("prong_layers", 3), zero_flags=c.get("zero_flags", False), n_classes=c.get("n_classes", 13)).to(device)
     m.load_state_dict(ck["model"], strict=False); m.eval()  # old checkpoints lack the zero_fill buffer
     tf = Tier1Transform.from_state(ck["transform"])
     if m.zero_flags: m.zero_band = torch.tensor(tf.zero_band(), device=device)
@@ -308,7 +309,7 @@ def _prong_validation(ke, lead_pP_r, lead_pP_f, Er, Ef, nch, lead_cls, Pr, Pf, p
     fig, axs = plots.plt.subplots(1, 3, figsize=(11, 3.2))
     _profile(axs[0], ke, lead_pP_r, lead_pP_f, edges, "fraction of events with a proton fit", "true leading proton KE [MeV]", frac=True)
     _profile(axs[1], ke, lead_pP_r, lead_pP_f, edges, "leading proton-hypothesis P [MeV]", "true leading proton KE [MeV]")
-    axs[1].set_yscale("log")
+    if any(np.any(np.asarray(l.get_ydata(), float) > 0) for l in axs[1].get_lines()): axs[1].set_yscale("log")  # small subsets can leave every bin empty
     if nch is not None:
         rows = []
         for k in range(0, 7):

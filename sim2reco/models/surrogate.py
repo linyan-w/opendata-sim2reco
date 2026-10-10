@@ -19,9 +19,9 @@ ZERO_COLS = [7, 8]  # Tier1Transform.ZERO_MODEL_COLS: log_recoil_nonvtx100, log_
 
 class Surrogate(nn.Module):
     def __init__(self, d_model=128, n_heads=4, n_layers=4, flow_hidden=512, flow_layers=4, tier2=False,
-                 prong_layers=3, zero_flags=False):
+                 prong_layers=3, zero_flags=False, n_classes=13):
         super().__init__()
-        self.enc = SetEncoder(d_model, n_heads, n_layers)
+        self.enc = SetEncoder(d_model, n_heads, n_layers, n_classes=n_classes)
         self.tier0 = nn.Sequential(nn.Linear(d_model, d_model), nn.SiLU(), nn.Linear(d_model, 3))
         self.card = nn.Sequential(nn.Linear(d_model, d_model), nn.SiLU(), nn.Linear(d_model, N_PRONG_CLASSES))
         # zero flags: Bernoulli heads for "non-vertex energy within 100 mm is exactly zero" and "isolated-blob

@@ -12,6 +12,7 @@
 \input{../bayes_1A_z/subset_NB_macros.tex}
 \input{../bayes_1A_z/subset_CI_macros.tex}
 \input{../m3_1A_z/closure_ccinc_macros.tex}
+\input{../all_events/macros.tex}
 
 \title{A generative surrogate of MINERvA reconstruction\\ trained on the open-data Monte Carlo: performance report}
 \author{L.~Wan\thanks{lwan@fnal.gov}}
@@ -1067,6 +1068,159 @@ Section~\ref{sec:bayes}, measured on the open dataset and carried over unchanged
 \caption{Per-event epistemic quantities of the surrogate on the GENIE and on the NuWro samples: reconstruction-flag
 logit variance, mean multiplicity-logit variance and event-flow flag.}
 \label{fig:nw-epi}
+\end{figure}
+\FloatBarrier
+
+\section{All-events models: CC and NC, all flavours}
+\label{sec:allevents}
+
+Everything above is for the CC $\nu_\mu$ population. This section repeats the main steps with a model trained on
+every interaction in the open dataset's training volume, with the same configuration otherwise (10\,MeV input
+threshold with neutrons, zero flags, length-bucketed batches, two-stage training, Bayesian last layers): model A
+on all events, the 2p2h-blind model B, the 2p2h holdout of Section~\ref{sec:holdout}, the calibration of
+Section~\ref{sec:bayes}, and the NuWro and paired GENIE samples of Section~\ref{sec:nuwro}. The CC $\nu_\mu$ models
+of the earlier sections are unchanged and remain the reference.
+
+\paragraph{Population.} The training volume holds \nAEnEvents{} interactions (Table~\ref{tab:ae-comp}), of which
+\nAEFracCCnumu{} are CC $\nu_\mu$, \nAEFracNC{} neutral current, \nAEFracCCnumubar{} CC $\bar\nu_\mu$ and
+\nAEFracCCnue{} CC $\nu_e$ and $\bar\nu_e$. The split by subrun is the one used throughout, so the CC $\nu_\mu$
+events of the all-events test split are exactly the test events of the CC $\nu_\mu$ models, and the two can be
+compared event for event. An NC event has a reconstructed muon candidate in \nAERecoNC{} of cases, against
+\nAERecoCCnumu{} for CC $\nu_\mu$; NC events make up \nAEFracRecoNC{} of the reconstructed sample. For them the
+``muon'' in the tuple is the leading track the reconstruction promoted to the muon role, rarely MINOS-matched,
+and the surrogate generates it in the same branches.
+
+\begin{table}[h]\centering\small
+\input{../all_events/tables/composition.tex}
+\caption{Composition of the all-events population (true vertex in the training volume) and of its test split.
+``other'' is the handful of events without a CC or NC label.}
+\label{tab:ae-comp}
+\end{table}
+
+\paragraph{What changes in the model.} Two things. First, a $\mu^+$ is its own input class (13 classes instead of
+12); in the CC $\nu_\mu$ models it falls into ``other'', which is harmless when the muon is always a $\mu^-$ but
+not when $\bar\nu_\mu$ events are trained on. Second, the event flow expresses the reconstructed muon relative to
+a true reference momentum (log momentum ratio and angle differences, Section~\ref{sec:model}), which for CC
+$\nu_\mu$ is the true muon. For all events the reference is, in order, the leading $\mu^-$
+(\nAERefMu{} of events), else the leading other charged lepton ($\mu^+$, $e^\pm$; \nAERefLepton{}), else the
+leading charged hadron ($p$, $\pi^\pm$, $K^\pm$) above the 10\,MeV input threshold (\nAERefHadron{}), else a
+1\,GeV vector along the beam (\nAERefBeam{}: NC events without a charged hadron above threshold, since every CC event has a charged lepton).
+The rule depends only on the final-state particles, so it applies to any generator, and the encoder sees the
+same particles the rule is evaluated on. For a CC $\nu_\mu$ event the reference is the true muon, as before.
+Nothing else changes: the heads, the flow variables, the decoder and the training schedule are those of the CC
+$\nu_\mu$ models, and the larger sample makes an epoch about 1.4 times longer.
+
+\paragraph{Performance by subset.} Table~\ref{tab:ae-perf} gives the evaluation of the all-events model A on its
+full test split and on the CC $\nu_\mu$, NC and remaining CC subsets, next to the CC $\nu_\mu$ model A on the same
+CC $\nu_\mu$ events. On those events the two models agree to the resolution of the test: closure AUC
+\nAEAUCmargAllCC{} and \nAEAUCcondAllCC{} for the all-events model against \nAEAUCmargCCModel{} and
+\nAEAUCcondCCModel{}, equal log losses for the flags and the multiplicity, equal $W_1$. On the non-calorimetry
+set of Table~\ref{tab:closure-ci} (Table~\ref{tab:ae-closure}) the all-events model gives \nAECLACCCIMarg{} and
+\nAECLACCCICond{} on CC $\nu_\mu$ against \nCLAFullCIMarg{} and \nCLAFullCICond{}. Adding the NC and other CC events to the training therefore costs nothing on the CC $\nu_\mu$ response. On the NC subset the
+reconstruction flag has a lower log loss than for CC ($\nAELLrecoAllNC$ against $\nAELLrecoAllCC$, mostly because
+most NC events are not reconstructed), the multiplicity a higher one ($\nAELLmultAllNC$), and the closure AUCs are
+\nAEAUCmargAllNC{} and \nAEAUCcondAllNC{} on \nAETestRecoNC{} reconstructed test events; on the other CC subset
+(\nAETestRecoCCnumubar{} $\bar\nu_\mu$ and \nAETestRecoCCnue{} $\nu_e$ events) \nAEAUCmargAllOther{} and
+\nAEAUCcondAllOther{}. Values below 0.5 here are not better than indistinguishable: they are the fluctuation of a
+classifier trained on a small sample, of order 0.01 on tens of thousands of events and larger on the other CC
+subset, and say that no difference is resolved. Figure~\ref{fig:ae-nc-muon} shows the NC ``muon'': in model space the
+momentum ratio to the reference is two-peaked for the unmatched candidates, and the surrogate reproduces it,
+MINOS-matched and not.
+
+\begin{table}[h]\centering\small
+\resizebox{\textwidth}{!}{\input{../all_events/tables/performance.tex}}
+\caption{CC $\nu_\mu$ model A on its CC $\nu_\mu$ test split, and all-events model A on the CC $\nu_\mu$, NC,
+other (CC $\bar\nu_\mu$, $\nu_e$, $\bar\nu_e$) and full test splits: event counts, log losses of the binary and
+multiplicity heads, closure AUCs (overall and per block, truth-conditional) and $W_1$ in model space. The prong
+row gives the AUC on the prong summaries alone and with the truth features.}
+\label{tab:ae-perf}
+\end{table}
+
+\begin{table}[h]\centering\small
+\input{../all_events/tables/closure.tex}
+\caption{Closure AUC with the recipe of Table~\ref{tab:closure-ci} on all nine variables and on the
+non-calorimetry set, for the CC $\nu_\mu$ models (upper rows, from Table~\ref{tab:closure-ci}) and the
+all-events models by test subset. Each value is one evaluation; the run-to-run variation is about 0.005 on the
+large samples and 0.01 to 0.02 on the 2p2h, NC and other CC samples.}
+\label{tab:ae-closure}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{../m3_1A_all_nc/figures/tier1_muon.png}
+\caption{All-events model A on the NC test events: the reconstructed ``muon'' momentum relative to the reference
+momentum, MINOS-matched (left) and not (middle), and the angle difference (right), in model space.}
+\label{fig:ae-nc-muon}
+\end{figure}
+
+\paragraph{2p2h holdout.} Model B is trained on all events except 2p2h, of any flavour, and compared with A on
+the held-out 2p2h test events, as in Section~\ref{sec:holdout} (Table~\ref{tab:ae-holdout}). The conclusion is
+the same. On the 2p2h events A and B reach truth-conditional closure AUC \nAEHoAllAcond{} and
+\nAEHoAllBcond{} (CC $\nu_\mu$ pair: \nAEHoCCAcond{} and \nAEHoCCBcond{}), with the calorimetric block at
+\nAEHoAllAcalo{} and \nAEHoAllBcalo{} and equal multiplicity log losses; B on its CC $\nu_\mu$ non-2p2h control
+gives \nAEHoAllCtlcond{}. The bootstrap of Section~\ref{sec:holdout} puts A against B at \nAEHoAllABcond{}
+[\nAEHoAllABcondLo{}, \nAEHoAllABcondHi{}] with the truth features and \nAEHoAllABmarg{}
+[\nAEHoAllABmargLo{}, \nAEHoAllABmargHi{}] without (CC $\nu_\mu$ pair: \nAEHoCCABcond{} and \nAEHoCCABmarg{}),
+and the open dataset against B at \nAEHoAllBcondBoot{} [\nAEHoAllBcondBootLo{}, \nAEHoAllBcondBootHi{}] against
+\nAEHoAllAcondBoot{} [\nAEHoAllAcondBootLo{}, \nAEHoAllAcondBootHi{}] for A. The all-events A--B difference is a
+few thousandths larger than the CC $\nu_\mu$ pair's and at the edge of what one seed per model resolves; the
+non-calorimetry closure (Table~\ref{tab:ae-closure}) is the same for A and B on 2p2h (\nAECLATwoPCICond{} and
+\nAECLBTwoPCICond{} with the truth features). The held-out sample is slightly larger than for the CC $\nu_\mu$
+pair because it includes the $\bar\nu_\mu$ and $\nu_e$ 2p2h events.
+
+\begin{table}[h]\centering\small
+\input{../all_events/tables/holdout.tex}
+\caption{2p2h holdout for the CC $\nu_\mu$ pair (Section~\ref{sec:holdout}) and the all-events pair: log losses
+and closure on the held-out 2p2h test events, B on its non-2p2h CC $\nu_\mu$ control, and the bootstrap
+evaluation of open dataset against B and against A (68\% intervals).}
+\label{tab:ae-holdout}
+\end{table}
+
+\paragraph{Calibration.} The posterior-draw calibration of Section~\ref{sec:bayes} applied to the all-events
+model A is in Table~\ref{tab:ae-cal}. With the control sample drawn from the CC $\nu_\mu$ non-2p2h test events, as
+for the CC $\nu_\mu$ model, the pulls are the same: RMS \nAECalAllCondRMS{} over \nAECalAllCondBins{} conditional
+bins and \nAECalAllMargRMS{} over \nAECalAllMargBins{} marginal bins, against \nAECalCCCondRMS{} and
+\nAECalCCMargRMS{}; on the 2p2h events \nAECalAllTwoPMargRMS{} against \nAECalCCTwoPMargRMS{} in the marginal
+bins. With a control drawn from all non-2p2h events the marginal RMS falls to \nAECalMixedMargRMS{}, because a
+quarter of that control is NC and its bins are therefore not the CC $\nu_\mu$ bins; the CC $\nu_\mu$ control is
+the like-for-like comparison, and on it the calibration is unchanged. The per-event epistemic quantities separate 2p2h from
+the CC $\nu_\mu$ control with AUC \nAEFlagAllExistAUC{} (reconstruction flag), \nAEFlagAllCardAUC{}
+(multiplicity) and \nAEFlagAllFlowAUC{} (event flow), against \nAEFlagCCExistAUC{}, \nAEFlagCCCardAUC{} and
+\nAEFlagCCFlowAUC{} for the CC $\nu_\mu$ model. Model A was trained on 2p2h, so these numbers describe where its
+posterior is wider, not an extrapolation flag; in the larger event-flow value the 2p2h events have a larger and the
+control a smaller median flow variance than in the CC $\nu_\mu$ model, and with one seed it is not interpreted
+further.
+
+\begin{table}[h]\centering\small
+\resizebox{\textwidth}{!}{\input{../all_events/tables/calibration.tex}}
+\caption{Posterior-draw calibration of model A: pull RMS over the bins (number of bins, fraction within
+$|\mathrm{pull}|<2$) on the held-out 2p2h events and on a 300,000-event non-2p2h control, and the AUC with which
+the per-event epistemic quantities separate 2p2h from the control. The CC $\nu_\mu$ control is the like-for-like
+comparison; the all-events control is shown for completeness.}
+\label{tab:ae-cal}
+\end{table}
+
+\paragraph{NuWro and paired GENIE.} The NuWro and GENIE samples of Section~\ref{sec:nuwro} are CC $\nu_\mu$ only,
+so the all-events model sees the same events as the CC $\nu_\mu$ model, and the comparison checks that the two
+give the same predictions there (Table~\ref{tab:ae-nuwro}, Fig.~\ref{fig:ae-nw}). They do: on GENIE the
+reconstruction fraction is \nAENWAllGenReco{} and the mean recoil \nAENWAllGenRecoil{}\,MeV against
+\nAENWRefReco{} and \nAENWRefRecoil{}\,MeV in the open dataset; on NuWro \nAENWAllNuwReco{} and
+\nAENWAllNuwRecoil{}\,MeV, a recoil shift of \nAENWAllRecoilShift{} against \nAENWCCRecoilShift{} through the CC
+$\nu_\mu$ model, and the largest epistemic AUC between the samples is \nAENWAllEpiAUC{} (\nAENWCCEpiAUC{}). The
+generator difference seen through the detector does not depend on which of the two models is used. An NC or
+$\bar\nu_\mu$ generator comparison would need a NuWro sample of those channels, which has not been produced.
+
+\begin{table}[h]\centering\small
+\resizebox{\textwidth}{!}{\input{../all_events/tables/nuwro.tex}}
+\caption{NuWro and paired GENIE (fiducial tracker, CC $\nu_\mu$) through the CC $\nu_\mu$ and the all-events
+model A: reconstruction fraction, MINOS-matched fraction among reconstructed events, mean recoil, fractions of
+exact zeros of the non-vertex and isolated-blob energies, and mean prong count.}
+\label{tab:ae-nuwro}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{../nuwro_compare_all/figures/reco_level.png}
+\caption{As Fig.~\ref{fig:nw-reco}, with the all-events model A.}
+\label{fig:ae-nw}
 \end{figure}
 \FloatBarrier
 

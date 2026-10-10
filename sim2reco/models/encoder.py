@@ -16,9 +16,9 @@ def momentum_features(mom):
 
 
 class SetEncoder(nn.Module):
-    def __init__(self, d_model=128, n_heads=4, n_layers=4, d_ff=256, dropout=0.0, n_ctx=5):
+    def __init__(self, d_model=128, n_heads=4, n_layers=4, d_ff=256, dropout=0.0, n_ctx=5, n_classes=N_CLASSES):
         super().__init__()
-        self.cls_emb = nn.Embedding(N_CLASSES, d_model)
+        self.cls_emb = nn.Embedding(n_classes, d_model)
         self.mom_mlp = nn.Sequential(nn.Linear(7, d_model), nn.SiLU(), nn.Linear(d_model, d_model))
         self.ctx_mlp = nn.Sequential(nn.Linear(n_ctx, d_model), nn.SiLU(), nn.Linear(d_model, d_model))
         self.global_tok = nn.Parameter(torch.zeros(1, 1, d_model))

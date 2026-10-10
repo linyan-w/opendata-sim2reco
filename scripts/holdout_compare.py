@@ -31,7 +31,7 @@ def profile(ax, rows_a, rows_b, key_real, key_fake, xlabel, ylabel, log=True):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir"); ap.add_argument("--a", required=True); ap.add_argument("--b", required=True)
-    ap.add_argument("--b-control", default=None); ap.add_argument("--a-full", default=None); ap.add_argument("--slim-dir", default="data/slim_1A")
+    ap.add_argument("--b-control", default=None); ap.add_argument("--a-full", default=None); ap.add_argument("--slim-dir", default="data/slim_1A"); ap.add_argument("--population", choices=["ccnumu", "all"], default="ccnumu", help="training population of the models (input-coverage figure)")
     a = ap.parse_args()
     out = pathlib.Path(a.out_dir); (out / "figures").mkdir(parents=True, exist_ok=True); (out / "tables").mkdir(exist_ok=True)
     MA, TA = load(a.a); MB, TB = load(a.b)
@@ -93,7 +93,7 @@ def main():
     try:
         from sim2reco.data.compact import load_compact
         stems = sorted(p[:-len(".truth.parquet")] for p in glob.glob(f"{a.slim_dir}/*.truth.parquet"))
-        d = load_compact(stems); it = d["intType"]; off = d["offsets"]; cls = d["cls"]; seg = np.repeat(np.arange(len(off) - 1), np.diff(off))
+        d = load_compact(stems, population=a.population); it = d["intType"]; off = d["offsets"]; cls = d["cls"]; seg = np.repeat(np.arange(len(off) - 1), np.diff(off))
         def count(c): o = np.zeros(len(off) - 1, int); np.add.at(o, seg, cls == c); return o
         n_p = count(4); n_pi = count(5) + count(6) + count(7)
         mom = d["mom"]; KE = np.sqrt((mom ** 2).sum(1) + 938.272 ** 2) - 938.272; isp = cls == 4

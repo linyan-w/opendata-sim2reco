@@ -15,9 +15,10 @@ from torch.utils.data import DataLoader
 from sim2reco.data.compact import CompactDataset, collate
 from sim2reco.io.writer import write_ntuple
 from sim2reco.prep.muon import decode_muon
-from sim2reco.prep.particles import context_from_tuple, in_training_population, select_from_tuple
+from sim2reco.prep.particles import context_from_tuple, in_population, reference_momentum, select_from_tuple
 from sim2reco.prep.prongs import decode as decode_prongs
 from sim2reco.train.m2 import to_dev
+from sim2reco.data.compact import selection_from_config
 from sim2reco.train import m2, m3
 
 PASSTHROUGH = ["mc_run", "mc_subrun", "mc_nthEvtInFile", "eventID", "mc_vtx", "mc_targetZ", "mc_targetA", "truth_targetID",
@@ -25,12 +26,9 @@ PASSTHROUGH = ["mc_run", "mc_subrun", "mc_nthEvtInFile", "eventID", "mc_vtx", "m
                "mc_incoming", "mc_current", "mc_intType"]
 
 
-def truth_to_compact(truth, ke_cut_mev=10.0, keep_neutrons=True):
-    parts = select_from_tuple(truth, ke_cut_mev, keep_neutrons); n = ak.to_numpy(ak.num(parts["cls"])).astype(np.int32)
-    pdg = truth["mc_FSPartPDG"]; mu = pdg == 13
-    Pmu = np.sqrt(truth["mc_FSPartPx"] ** 2 + truth["mc_FSPartPy"] ** 2 + truth["mc_FSPartPz"] ** 2)
-    lead = ak.argmax(ak.where(mu, Pmu, -1.0), axis=1, keepdims=True)
-    mu_true = np.stack([ak.to_numpy(ak.flatten(ak.fill_none(truth[f"mc_FSPart{c}"][lead], 0.0))) for c in ("Px", "Py", "Pz")], 1).astype(np.float32)
+def truth_to_compact(truth, ke_cut_mev=10.0, keep_neutrons=True, population="ccnumu"):
+    parts = select_from_tuple(truth, ke_cut_mev, keep_neutrons, population); n = ak.to_numpy(ak.num(parts["cls"])).astype(np.int32)
+    mu_true = reference_momentum(truth, population, ke_cut_mev)
     N = len(truth)
     return {"offsets": np.concatenate([[0], np.cumsum(n)]).astype(np.int64),
             "cls": ak.to_numpy(ak.flatten(parts["cls"])).astype(np.int8),
@@ -49,11 +47,11 @@ def main():
     a = ap.parse_args()
     torch.manual_seed(a.seed)
     truth = ak.from_parquet(a.truth)
-    truth = truth[in_training_population(truth)]
+    ck = torch.load(pathlib.Path(a.model_dir) / "model.pt", map_location="cpu", weights_only=False); sel = selection_from_config(ck["config"])
+    truth = truth[in_population(truth, sel["population"])]
     if a.n: truth = truth[:a.n]
-    ck = torch.load(pathlib.Path(a.model_dir) / "model.pt", map_location="cpu", weights_only=False)
     tier2 = ck["config"].get("tier2", False)
-    d = truth_to_compact(truth, ck["config"].get("ke_cut_mev", 50.0), ck["config"].get("keep_neutrons", False))
+    d = truth_to_compact(truth, **sel)
     if tier2:
         model, tf, ptf = m3.load_model(pathlib.Path(a.model_dir) / "model.pt")
     else:
