@@ -19,7 +19,7 @@ ZERO_COLS = [7, 8]  # Tier1Transform.ZERO_MODEL_COLS: log_recoil_nonvtx100, log_
 
 class Surrogate(nn.Module):
     def __init__(self, d_model=128, n_heads=4, n_layers=4, flow_hidden=512, flow_layers=4, tier2=False,
-                 prong_layers=3, zero_flags=False, n_classes=13):
+                 prong_layers=3, zero_flags=False, n_classes=13, vtx_cond_z=False):
         super().__init__()
         self.enc = SetEncoder(d_model, n_heads, n_layers, n_classes=n_classes)
         self.tier0 = nn.Sequential(nn.Linear(d_model, d_model), nn.SiLU(), nn.Linear(d_model, 3))
@@ -39,7 +39,14 @@ class Surrogate(nn.Module):
         if tier2:
             # vertex-plane class head (unsnapped / snapped to nearest plane + delta) on z, flags and N
             # input: flow conditioning + the phase of the true z within the plane cycle (+ sin/cos of it)
-            self.vtx = nn.Sequential(nn.Linear(d_model + 64 + 3, d_model), nn.SiLU(), nn.Linear(d_model, d_model), nn.SiLU(), nn.Linear(d_model, N_VTX_CLASSES))
+            # vtx_cond_z: the head also sees the (model-space) reconstructed vertex z residual, so that the snapping class is
+            # consistent with the event flow's z: without it the class and the flow's z are independent given the conditions,
+            # a near class overrides a far z at decode time and the vertex-z tails come out ~30% thin
+            # vtx_cond_z = "far": the head sees only a smooth near/far indicator of the residual (|dz| against 3 planes), so the
+            # choice among the near planes stays the conditional marginal it was, and only the near/far split follows the flow's z
+            self.vtx_cond_z = vtx_cond_z
+            self.register_buffer("vtx_zpar", torch.tensor([1.0, 0.0, 1.0]))  # [s0, loc, scale] of the model-space z column (set from the transform)
+            self.vtx = nn.Sequential(nn.Linear(d_model + 64 + 3 + (1 if vtx_cond_z else 0), d_model), nn.SiLU(), nn.Linear(d_model, d_model), nn.SiLU(), nn.Linear(d_model, N_VTX_CLASSES))
             # prong set flow, conditioned on z, flags, N, and the Tier 1 vector; cross-attends particle tokens
             self.prong = ProngFlow(PRONG_DIM, d_model, d_model + 64 + TIER1_DIM, prong_layers)
 
@@ -64,11 +71,23 @@ class Surrogate(nn.Module):
     def flow_cond(self, z, flags, nprong):
         return torch.cat([z, self.flag_emb(flags), self.n_emb(nprong.clamp(0, N_PRONG_CLASSES - 1))], -1)
 
-    def vtx_logits(self, cond, phase):
-        ph = phase[:, None] * 3.14159265
-        return self.vtx(torch.cat([cond, phase[:, None], ph.sin(), ph.cos()], -1))
+    def vtx_logits(self, cond, phase, zx=None):
+        """zx: model-space vertex-z residual column of the Tier 1 vector (the target in training, the flow's sample at decode), used if vtx_cond_z."""
+        ph = phase[:, None] * 3.14159265; inp = [cond, phase[:, None], ph.sin(), ph.cos()]
+        mode = getattr(self, "vtx_cond_z", False)
+        if mode == "far":
+            s0, loc, sc = self.vtx_zpar; dz = torch.sinh(zx * sc + loc) * s0  # model space -> mm
+            inp.append(torch.tanh((dz.abs() - 70.0) / 15.0))  # ~ -1 within 3 planes of the true z, ~ +1 beyond
+        elif mode: inp.append(zx)
+        return self.vtx(torch.cat(inp, -1))
 
-    def losses(self, b):
+    def losses(self, b, only_vtx=False):
+        """only_vtx: just the vertex-class loss, with the rest of the network frozen (encoder under no_grad); for the head-only stage."""
+        if only_vtx:
+            with torch.no_grad():
+                z = self.encode(b); t0 = b["tier0"]; reco = t0[:, 0] > 0; fl = reco & (b["valid"] > 0)
+                flags = self.full_flags(z[fl], t0[fl, 1:3], b["zflags"][fl]) if self.zero_flags else t0[fl, 1:3]; cond = self.flow_cond(z[fl], flags, b["nprong"][fl])
+            return {"vtx": F.cross_entropy(self.vtx_logits(cond, b["vphase"][fl], b["x1"][fl][:, 5:6]), b["vclass"][fl]) if fl.any() else cond.sum() * 0}
         z, h = self.encode(b, return_tokens=True)
         t0 = b["tier0"]; reco = t0[:, 0] > 0; minos = reco & (t0[:, 1] > 0)
         logits = self.tier0(z)
@@ -84,7 +103,7 @@ class Surrogate(nn.Module):
         if self.zero_flags:
             out["zero"] = F.binary_cross_entropy_with_logits(self.zero(z[fl]), b["zflags"][fl]) if fl.any() else logits.sum() * 0
         if self.tier2:
-            out["vtx"] = F.cross_entropy(self.vtx_logits(cond, b["vphase"][fl]), b["vclass"][fl]) if fl.any() else logits.sum() * 0
+            out["vtx"] = F.cross_entropy(self.vtx_logits(cond, b["vphase"][fl], b["x1"][fl][:, 5:6]), b["vclass"][fl]) if fl.any() else logits.sum() * 0
             pm = b["pmask"][fl]; has = pm.any(1)
             if has.any():
                 pc = torch.cat([cond[has], b["x1"][fl][has]], -1)
@@ -127,7 +146,7 @@ class Surrogate(nn.Module):
         out = {"exist": exist, "minos": flags[:, 0] > 0, "charge": flags[:, 1] > 0, "nprong": nprong, "x1": x1, "p0": p0, "pn": pn, "flags": flags}
         if self.zero_flags: out["zflags"] = flags[:, 2:4] > 0
         if self.tier2:
-            pv = F.softmax(self.vtx_logits(cond, b["vphase"]), -1)
+            pv = F.softmax(self.vtx_logits(cond, b["vphase"], x1[:, 5:6]), -1)
             out["vclass"] = torch.multinomial(pv, 1)[:, 0]; out["pv"] = pv
             h = self.encode(b, return_tokens=True)[1] if prongs else None
             N = int(min(nprong.max().item(), PRONG_DIM_CAP)) if len(nprong) else 0

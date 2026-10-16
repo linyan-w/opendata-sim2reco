@@ -44,7 +44,9 @@ def fit_transforms(d, split, seed):
 
 
 def train(stems, out_dir, init_from="reports/m2/model.pt", epochs=12, bs=1024, lr=2e-4, seed=0, device="cuda",
-          prong_layers=3, log_every=500, exclude_inttype=None, ke_cut_mev=None, keep_neutrons=None):  # selection inherited from the M2 model
+          prong_layers=3, log_every=500, exclude_inttype=None, ke_cut_mev=None, keep_neutrons=None, vtx_cond_z=False, only_vtx=False):  # selection inherited from the M2 model
+    """vtx_cond_z: vertex-class head conditioned on the reco z residual (see Surrogate); only_vtx: train the vertex head alone, everything else
+    frozen (warm start from a finished M3 model), for the head-only stage that makes the snapping class consistent with the flow's z."""
     out = pathlib.Path(out_dir); out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(seed); np.random.seed(seed); t0 = time.time()
     ck0 = torch.load(init_from, map_location="cpu", weights_only=False)["config"]
@@ -56,28 +58,31 @@ def train(stems, out_dir, init_from="reports/m2/model.pt", epochs=12, bs=1024, l
     idx, ds, ld = make_loaders(d, split, tf, ptf, bs, seed)
     print(f"data: {len(split)} events, {d['p_offsets'][-1]} prongs, {len(tf.planes.z)} vertex planes, {time.time()-t0:.0f} s", flush=True)
     ck = torch.load(init_from, map_location=device, weights_only=False); c = ck["config"]
-    model = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=prong_layers, zero_flags=c.get("zero_flags", False), n_classes=c.get("n_classes", 13)).to(device)
+    model = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=prong_layers, zero_flags=c.get("zero_flags", False), n_classes=c.get("n_classes", 13), vtx_cond_z=vtx_cond_z).to(device)
     if model.zero_flags: model.zero_fill.copy_(torch.tensor(tf.zero_fill(), device=device)); model.zero_band = torch.tensor(tf.zero_band(), device=device)  # the M3 transform is refitted
+    model.vtx_zpar.copy_(torch.tensor([tf.s0[5], tf.loc[5], tf.scale[5]], dtype=torch.float32, device=device))
     own = model.state_dict()
-    sd = {k: v for k, v in ck["model"].items() if k in own and own[k].shape == v.shape and k != "zero_fill"}  # skip re-shaped heads; keep the refitted zero_fill
+    sd = {k: v for k, v in ck["model"].items() if k in own and own[k].shape == v.shape and k not in ("zero_fill", "vtx_zpar")}  # skip re-shaped heads; keep the refitted zero_fill
     missing, unexpected = model.load_state_dict(sd, strict=False)
     print(f"warm start from {init_from}: {len(missing)} new tensors (vtx head + prong flow), {len(unexpected)} unexpected", flush=True)
-    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    if only_vtx:
+        for n_, p_ in model.named_parameters(): p_.requires_grad = n_.startswith("vtx.")
+    opt = torch.optim.AdamW([p_ for p_ in model.parameters() if p_.requires_grad], lr=lr, weight_decay=1e-4)
     steps = epochs * len(ld["train"])
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=steps, pct_start=0.05)
     hist, best, step = [], np.inf, 0
-    cfg = dict(c, tier2=True, prong_layers=prong_layers, exclude_inttype=list(exclude_inttype or []), ke_cut_mev=ke_cut_mev, keep_neutrons=keep_neutrons, zero_flags=model.zero_flags)
+    cfg = dict(c, tier2=True, prong_layers=prong_layers, exclude_inttype=list(exclude_inttype or []), ke_cut_mev=ke_cut_mev, keep_neutrons=keep_neutrons, zero_flags=model.zero_flags, vtx_cond_z=vtx_cond_z)
     for ep in range(epochs):
         model.train(); agg = {}
         for b in ld["train"]:
-            b = m2.to_dev(b, device); L = model.losses(b); loss = sum(L.values())
+            b = m2.to_dev(b, device); L = model.losses(b, only_vtx=only_vtx); loss = sum(L.values())
             opt.zero_grad(set_to_none=True); loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step(); sched.step(); step += 1
             for k, v in L.items(): agg[k] = agg.get(k, 0) + v.item()
             if step % log_every == 0: print(f"  step {step} " + " ".join(f"{k} {v.item():.4f}" for k, v in L.items()), flush=True)
         model.eval(); va = {}
         with torch.no_grad():
             for b in ld["val"]:
-                L = model.losses(m2.to_dev(b, device))
+                L = model.losses(m2.to_dev(b, device), only_vtx=only_vtx)
                 for k, v in L.items(): va[k] = va.get(k, 0) + v.item() / len(ld["val"])
         tot = sum(va.values()); hist.append({"epoch": ep, "train": {k: v / len(ld["train"]) for k, v in agg.items()}, "val": va, "time": time.time() - t0})
         print(f"epoch {ep}: val " + " ".join(f"{k} {v:.4f}" for k, v in va.items()) + f"  total {tot:.4f}  [{time.time()-t0:.0f} s]", flush=True)
@@ -90,10 +95,11 @@ def train(stems, out_dir, init_from="reports/m2/model.pt", epochs=12, bs=1024, l
 
 def load_model(path, device="cuda"):
     ck = torch.load(path, map_location=device, weights_only=False); c = ck["config"]
-    m = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=c.get("prong_layers", 3), zero_flags=c.get("zero_flags", False), n_classes=c.get("n_classes", 13)).to(device)
+    m = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=c.get("prong_layers", 3), zero_flags=c.get("zero_flags", False), n_classes=c.get("n_classes", 13), vtx_cond_z=c.get("vtx_cond_z", False)).to(device)
     m.load_state_dict(ck["model"], strict=False); m.eval()  # old checkpoints lack the zero_fill buffer
     tf = Tier1Transform.from_state(ck["transform"])
     if m.zero_flags: m.zero_band = torch.tensor(tf.zero_band(), device=device)
+    if "vtx_zpar" not in ck["model"]: m.vtx_zpar.copy_(torch.tensor([tf.s0[5], tf.loc[5], tf.scale[5]], dtype=torch.float32, device=device))
     return m, tf, ProngTransform.from_state(ck["prong_transform"])
 
 
