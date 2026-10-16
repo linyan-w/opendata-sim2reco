@@ -15,7 +15,7 @@ rng = np.random.default_rng(0); stems = sorted(p[:-len(".truth.parquet")] for p 
 it = d["intType"]; N = len(it); sub = rng.permutation(N)[:2000000]
 cls, mom, mask = _pad(d, sub); X, names = event_features(cls, mom, mask, d["ctx"][sub])
 P = np.linalg.norm(mom, axis=-1); isp = mask & (cls == 4); Pp = np.where(isp, P, -1.0); Ps = -np.sort(-Pp, axis=1); X = np.column_stack([X, Ps[:, 0], Ps[:, 1]])
-half = len(sub) // 2; out = {}
+half = len(sub) // 2; out = {}; per_event = {}
 print(f"{'process':12s} {'share':>6s} {'AUC':>6s} | fraction of the process in regions where rest/proc density < 0.1 | < 0.01 | median rest/proc | p10")
 for code in sorted(np.unique(it)):
     y = it[sub] == code; share = (it == code).mean()
@@ -23,7 +23,8 @@ for code in sorted(np.unique(it)):
     m = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.1, max_leaf_nodes=63, random_state=0).fit(X[:half], y[:half])
     p = np.clip(m.predict_proba(X[half:])[:, 1], 1e-6, 1 - 1e-6); yt = y[half:]; prior = y[:half].mean()
     r_rest_over_proc = (1 - p) / p * prior / (1 - prior)  # f_rest / f_proc at the event's location
-    rr = r_rest_over_proc[yt]; auc = roc_auc_score(yt, p)
+    rr = r_rest_over_proc[yt]; auc = roc_auc_score(yt, p); per_event[NAMES.get(int(code), str(code))] = rr.astype(np.float32)
     out[NAMES.get(int(code), str(code))] = {"code": int(code), "share": float(share), "auc": float(auc), "frac_lt_0.1": float((rr < 0.1).mean()), "frac_lt_0.01": float((rr < 0.01).mean()), "median": float(np.median(rr)), "p10": float(np.percentile(rr, 10)), "n_test": int(yt.sum())}
     print(f"{NAMES.get(int(code), str(code)):12s} {100*share:5.2f}% {auc:6.3f} | {100*(rr<0.1).mean():6.1f}% | {100*(rr<0.01).mean():6.2f}% | {np.median(rr):8.2f} | {np.percentile(rr,10):6.3f}", flush=True)
 json.dump(out, open("reports/coverage_2p2h/by_process.json", "w"), indent=1)
+np.savez_compressed("reports/coverage_2p2h/by_process_ratios.npz", **{k: v for k, v in per_event.items()}, **{f"prior_{k}": np.float64(out[k]["share"]) for k in per_event})  # per-event rest/process density ratios, for the paper figure

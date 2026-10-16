@@ -8,8 +8,8 @@ import argparse, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import awkward as ak, numpy as np
 from sim2reco.prep.volumes import vertex_pool, in_volume
-ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("inp", nargs="+"); ap.add_argument("--volume", default="full"); ap.add_argument("--slim-dir", default="data/slim_1A"); ap.add_argument("--seed", type=int, default=1); a = ap.parse_args()
-pool, frac = vertex_pool(a.slim_dir, a.volume); rng = np.random.default_rng(a.seed)
+ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("inp", nargs="+"); ap.add_argument("--volume", default="full"); ap.add_argument("--slim-dir", default="data/slim_1A"); ap.add_argument("--seed", type=int, default=1); ap.add_argument("--pool", choices=["cc", "nc"], default="cc"); a = ap.parse_args()
+pool, frac = vertex_pool(a.slim_dir, a.volume, {"cc": 1, "nc": 2}[a.pool]); rng = np.random.default_rng(a.seed)
 t = ak.concatenate([ak.from_parquet(f) for f in a.inp]); Z = ak.to_numpy(t["mc_targetZ"])
 key = ak.to_numpy(t["mc_run"]).astype(np.int64) * 10_000_000 + ak.to_numpy(t["mc_nthEvtInFile"]); assert len(np.unique(key)) == len(key), "event keys collide across inputs"
 keep = np.isin(Z, list(pool)); vtx = np.empty((len(t), 4)); mod = np.empty(len(t), np.int32)

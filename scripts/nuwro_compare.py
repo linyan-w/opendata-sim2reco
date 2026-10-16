@@ -3,18 +3,20 @@
 Three things side by side: the open dataset's reconstruction of the GENIE events (ref_* columns of the GENIE truth
 file), the surrogate on GENIE, and the surrogate on NuWro. Truth-level differences between the generators are shown
 first, so reconstructed-level differences can be read against them. Outputs figures, tables, macros and a JSON in
-reports/nuwro_compare/. Usage: scripts/nuwro_compare.py [--genie-truth ... --genie-sur ... --nuwro-truth ... --nuwro-sur ...]"""
+reports/nuwro_compare/. --nc: NC samples, where the primary lepton is the outgoing neutrino; the muon-candidate response
+is then taken against the reference momentum the all-events model uses. Usage: scripts/nuwro_compare.py [--genie-truth ... --genie-sur ... --nuwro-truth ... --nuwro-sur ...]"""
 import argparse, json, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import awkward as ak, numpy as np, uproot
 from sklearn.metrics import roc_auc_score
-from sim2reco.prep.particles import select_from_tuple
+from sim2reco.prep.particles import select_from_tuple, reference_momentum
 from sim2reco.prep.frames import theta_phi_beam
 from sim2reco.eval import plots
 ap = argparse.ArgumentParser()
 ap.add_argument("--genie-truth", default="data/genie_tracker/genie_me_fhc_tracker.truth.parquet"); ap.add_argument("--genie-sur", default="data/genie_tracker/surrogate_Az_genie_me_fhc_tracker.root")
 ap.add_argument("--nuwro-truth", default="data/nuwro_2026-10/nuwro_me_fhc_tracker.truth.parquet"); ap.add_argument("--nuwro-sur", default="data/nuwro_2026-10/surrogate_Az_nuwro_me_fhc_tracker.root")
-ap.add_argument("--out", default="reports/nuwro_compare"); a = ap.parse_args()
+ap.add_argument("--out", default="reports/nuwro_compare"); ap.add_argument("--nc", action="store_true"); ap.add_argument("--macro-prefix", default="nNW"); a = ap.parse_args()
+LEP = "outgoing neutrino" if a.nc else "muon"
 out = pathlib.Path(a.out); (out / "figures").mkdir(parents=True, exist_ok=True); (out / "tables").mkdir(exist_ok=True)
 MP = 938.272; CH = {1: "QE", 2: "RES", 3: "DIS", 4: "COH", 8: "2p2h", 0: "other"}
 C = {"ref": plots.PALETTE["real"], "genie": plots.PALETTE["model"], "nuwro": plots.PALETTE["third"]}
@@ -24,14 +26,16 @@ def load(truth_path, sur_path, has_ref):
     t = ak.from_parquet(truth_path); n = len(t)
     mu = ak.to_numpy(t["mc_primFSLepton"]); th, _ = theta_phi_beam(mu[:, 0], mu[:, 1], mu[:, 2])
     Enu = ak.to_numpy(t["mc_incomingE"]); pmu = np.linalg.norm(mu[:, :3], axis=1)
-    Q2 = 2 * Enu * (mu[:, 3] - pmu * np.cos(th)) - 105.66 ** 2  # lepton-defined, same for both generators (GENIE's stored Q2 has sentinels)
+    Q2 = 2 * Enu * (mu[:, 3] - pmu * np.cos(th)) - (0.0 if a.nc else 105.66 ** 2)  # lepton-defined, same for both generators (GENIE's stored Q2 has sentinels)
     W = np.sqrt(np.clip(MP ** 2 + 2 * MP * (Enu - mu[:, 3]) - Q2, 0, None))
     parts = select_from_tuple(t, 10.0, True); cls = parts["cls"]; nhad = ak.to_numpy(ak.sum(cls >= 4, axis=1))
     # hadronic KE of the kept tokens from the class masses (the selector returns cls, px, py, pz)
     MASS = np.array([0, 105.66, 0.511, 0, 938.27, 139.57, 139.57, 134.98, 493.68, 497.61, 1115.7, 0, 939.57])
     P = np.sqrt(parts["px"] ** 2 + parts["py"] ** 2 + parts["pz"] ** 2); m = ak.Array(MASS[ak.to_numpy(ak.flatten(cls)).astype(int)]); m = ak.unflatten(m, ak.num(cls))
     keh = ak.to_numpy(ak.sum(ak.where(cls >= 4, np.sqrt(P ** 2 + m ** 2) - m, 0.0), axis=1))
-    T = {"n": n, "Enu": Enu / 1e3, "muP": pmu / 1e3, "muth": th, "Q2": Q2 / 1e6, "W": W / 1e3, "nhad": nhad, "keh": keh, "ch": ak.to_numpy(t["mc_intType"]), "Z": ak.to_numpy(t["mc_targetZ"])}
+    vis = ak.to_numpy(ak.sum(ak.where((cls >= 2) & (cls != 12), np.sqrt(P ** 2 + m ** 2) - m, 0.0), axis=1))  # visible KE: e, photons, hadrons except neutrons (no muon)
+    T = {"n": n, "Enu": Enu / 1e3, "muP": pmu / 1e3, "muth": th, "Q2": Q2 / 1e6, "W": W / 1e3, "nhad": nhad, "keh": keh, "vis": vis, "Egam": ak.to_numpy(ak.sum(ak.where(t["mc_FSPartPDG"] == 22, t["mc_FSPartE"], 0.0), axis=1)), "ch": ak.to_numpy(t["mc_intType"]), "Z": ak.to_numpy(t["mc_targetZ"]),
+         "refP": np.linalg.norm(reference_momentum(t, "all"), axis=1) / 1e3 if a.nc else pmu / 1e3}
     key = np.stack([ak.to_numpy(t["mc_run"]), ak.to_numpy(t["mc_subrun"]), ak.to_numpy(t["mc_nthEvtInFile"])], 1)
     s = uproot.open(sur_path)["MasterAnaDev"]
     cols = ["mc_run", "mc_subrun", "mc_nthEvtInFile", "MasterAnaDev_muon_P", "MasterAnaDev_muon_theta", "MasterAnaDev_minos_trk_is_ok", "MasterAnaDev_recoil_E", "recoil_energy_nonmuon_nonvtx100mm", "nonvtx_iso_blobs_energy", "n_prongs", "surrogate_p_reco_exists",
@@ -53,7 +57,7 @@ R = {"n_genie": int(TG["n"]), "n_nuwro": int(TN["n"])}
 
 # ---------- truth-level comparison
 fig, axs = plots.plt.subplots(2, 4, figsize=(14, 6)); axs = axs.ravel()
-specs = [("Enu", np.linspace(0, 25, 51), r"true $E_\nu$ [GeV]", True), ("muP", np.linspace(0, 20, 51), "true muon momentum [GeV]", True), ("muth", np.linspace(0, 0.6, 49), "true muon angle to the beam [rad]", False),
+specs = [("Enu", np.linspace(0, 25, 51), r"true $E_\nu$ [GeV]", True), ("muP", np.linspace(0, 20, 51), f"true {LEP} momentum [GeV]", True), ("muth", np.linspace(0, 0.6, 49), f"true {LEP} angle to the beam [rad]", False),
          ("Q2", np.linspace(0, 4, 41), r"true $Q^2$ [GeV$^2$]", True), ("W", np.linspace(0.8, 4.5, 38), "lepton-defined $W$ [GeV]", False), ("nhad", np.arange(-0.5, 15.5, 1), "hadron tokens after cuts", True), ("keh", np.logspace(1, 4.3, 34), "true hadronic KE [MeV]", True)]
 for ax, (k, e, xl, logy) in zip(axs, specs):
     for g, T in (("genie", TG), ("nuwro", TN)):
@@ -108,13 +112,22 @@ for g, T, S, R_ in (("ref", TG, None, RG), ("genie", TG, SG, None), ("nuwro", TN
     m, s = binned_mean(T["Enu"], reco.astype(float), e_nu); axs[0].errorbar(0.5 * (e_nu[:-1] + e_nu[1:]), m, s, fmt="o-", ms=3, color=C[g], label=LAB[g])
     m, s = binned_mean(T["nhad"].astype(float), reco.astype(float), e_nh); axs[1].errorbar(np.arange(0, 12), m, s, fmt="o-", ms=3, color=C[g])
     keh = T["keh"][src["row"]]; m, s = binned_mean(keh, np.log10(np.clip(src["recoil"], 1, None)), e_ke); axs[2].errorbar(np.sqrt(e_ke[:-1] * e_ke[1:]), m, s, fmt="o-", ms=3, color=C[g])
-    muP = T["muP"][src["row"]]; ratio = src["P"] / np.maximum(muP, 1e-3); e_p = np.linspace(1, 15, 15); med = []
+    muP = T["refP"][src["row"]]; ratio = src["P"] / np.maximum(muP, 1e-3); e_p = np.linspace(1, 15, 15); med = []
     for lo, hi in zip(e_p[:-1], e_p[1:]):
         sel = (muP >= lo) & (muP < hi) & np.isfinite(ratio); med.append(np.median(ratio[sel]) if sel.sum() >= 50 else np.nan)
     axs[3].plot(0.5 * (e_p[:-1] + e_p[1:]), med, "o-", ms=3, color=C[g])
 axs[0].set_xlabel(r"true $E_\nu$ [GeV]"); axs[0].set_ylabel("P(reco muon candidate)"); axs[1].set_xlabel("hadron tokens after cuts"); axs[1].set_ylabel("P(reco muon candidate)")
-axs[2].set_xlabel("true hadronic KE [MeV]"); axs[2].set_ylabel(r"mean $\log_{10}$ reco recoil $E$"); axs[2].set_xscale("log"); axs[3].set_xlabel("true muon momentum [GeV]"); axs[3].set_ylabel(r"median $P_\mathrm{reco}/P_\mathrm{true}$"); axs[3].set_ylim(0.9, 1.1); axs[0].legend(frameon=False, fontsize=7)
+axs[2].set_xlabel("true hadronic KE [MeV]"); axs[2].set_ylabel(r"mean $\log_{10}$ reco recoil $E$"); axs[2].set_xscale("log"); axs[3].set_xlabel("reference momentum [GeV]" if a.nc else "true muon momentum [GeV]"); axs[3].set_ylabel(r"median $P_\mathrm{reco}/P_\mathrm{true}$"); axs[3].set_ylim(*((None, None) if a.nc else (0.9, 1.1))); axs[0].legend(frameon=False, fontsize=7)
 plots.save(fig, out / "figures" / "conditional_response.png")
+for g, T in (("genie", TG), ("nuwro", TN)):  # photons in events with little hadronic KE (not on the hadronic-KE axis)
+    lo = T["keh"] < 150; R[f"lowkeh_{g}"] = {"frac_events": float(lo.mean()), "frac_with_photon": float((T["Egam"][lo] > 0).mean()), "mean_photon_E": float(T["Egam"][lo].mean())}
+# reconstruction probability in bins of visible kinetic energy (photons included): composition-robust conditional
+e_vis = np.array([0, 50, 100, 200, 400, 700, 1000, 1500, 2500, 4000, 7000, 20000]); R["preco_vs_visible"] = {"edges": e_vis.tolist()}
+for g, T, S in (("ref", TG, RG), ("genie", TG, SG), ("nuwro", TN, SN)):
+    reco = np.zeros(T["n"], bool); reco[S["row"]] = True; R["preco_vs_visible"][g] = [float(reco[(T["vis"] >= lo) & (T["vis"] < hi)].mean()) for lo, hi in zip(e_vis[:-1], e_vis[1:])]
+pv = R["preco_vs_visible"]; tex = "\\begin{tabular}{lccc}\n\\toprule\nvisible KE [MeV] & open dataset & surrogate on GENIE & surrogate on NuWro \\\\\n\\midrule\n"
+tex += "".join(f"{lo:,}--{hi:,} & {pv['ref'][i]:.3f} & {pv['genie'][i]:.3f} & {pv['nuwro'][i]:.3f} \\\\\n" for i, (lo, hi) in enumerate(zip(e_vis[:-1], e_vis[1:])))
+(out / "tables" / "preco_vs_visible.tex").write_text(tex + "\\bottomrule\n\\end{tabular}\n")
 
 # ---------- summary table and epistemic flags
 def frac0(v): return float(np.mean(v <= 0))
@@ -150,6 +163,8 @@ for g, nm in (("ref", "Ref"), ("genie", "Gen"), ("nuwro", "Nuw")):
 for g, nm in (("genie", "Gen"), ("nuwro", "Nuw")):
     for c, cn in (("QE", "QE"), ("RES", "RES"), ("DIS", "DIS"), ("COH", "COH"), ("2p2h", "MEC")): M[f"nNW{nm}Frac{cn}"] = f"{100*R[f'channel_frac_{g}'][c]:.1f}\\%"
     M[f"nNW{nm}MeanEnu"] = f"{R['truth_means']['Enu'][g]:.2f}"; M[f"nNW{nm}MeanNhad"] = f"{R['truth_means']['nhad'][g]:.2f}"; M[f"nNW{nm}MeanKeh"] = f"{R['truth_means']['keh'][g]:.0f}"
+for g, nm in (("genie", "Gen"), ("nuwro", "Nuw")):
+    d = R[f"lowkeh_{g}"]; M[f"nNW{nm}LowKehGamFrac"] = f"{100 * d['frac_with_photon']:.0f}\\%"; M[f"nNW{nm}LowKehGamE"] = f"{d['mean_photon_E']:.0f}"
 for k, kn in (("epi_exist", "Exist"), ("epi_card", "Card"), ("epi_flow", "Flow"), ("epi_recoil_rel", "RecoilRel"), ("epi_preco", "Preco")): M[f"nNWEpi{kn}Ratio"] = f"{E[k]['ratio']:.2f}"; M[f"nNWEpi{kn}AUC"] = f"{E[k]['auc']:.2f}"
-(out / "macros.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in M.items()))
+(out / "macros.tex").write_text("".join(f"\\newcommand{{\\{a.macro_prefix + k[3:]}}}{{{v}}}\n" for k, v in M.items()))
 print(json.dumps({k: v for k, v in R.items() if k.startswith("reco_") or k.startswith("channel") or k == "epistemic_flags"}, indent=1, default=float))

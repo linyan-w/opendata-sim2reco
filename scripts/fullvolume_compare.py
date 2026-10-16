@@ -17,10 +17,10 @@ from sim2reco.eval import plots
 ap = argparse.ArgumentParser(); D = "data/fullvolume"
 ap.add_argument("--genie-truth", default=f"{D}/genie_fullvol.truth.parquet"); ap.add_argument("--genie-sur", default=f"{D}/surrogate_Az_genie_fullvol.root")
 ap.add_argument("--nuwro-truth", default=f"{D}/nuwro_fullvol.truth.parquet"); ap.add_argument("--nuwro-sur", default=f"{D}/surrogate_Az_nuwro_fullvol.root")
-ap.add_argument("--out", default="reports/outfv"); a = ap.parse_args()
+ap.add_argument("--out", default="reports/outfv"); ap.add_argument("--macro-prefix", default="nOFV"); ap.add_argument("--gen-label", default="NuWro", help="name of the second generator in figures (the --nuwro-* inputs)"); a = ap.parse_args()
 out = pathlib.Path(a.out); (out / "figures").mkdir(parents=True, exist_ok=True); (out / "tables").mkdir(exist_ok=True)
 C = {"ref": plots.PALETTE["real"], "genie": plots.PALETTE["model"], "nuwro": plots.PALETTE["third"]}
-LAB = {"ref": "open dataset (GENIE events)", "genie": "surrogate on GENIE", "nuwro": "surrogate on NuWro"}
+LAB = {"ref": "open dataset (GENIE events)", "genie": "surrogate on GENIE", "nuwro": f"surrogate on {a.gen_label}"}
 REG = ["fiducial", "upstream", "downstream", "transverse"]
 REGLAB = {"fiducial": "fiducial tracker", "upstream": r"upstream ($z<5990$ mm)", "downstream": r"downstream ($z>8340$ mm)", "transverse": "outside the hexagon"}
 NUC = [(6, "C"), (82, "Pb"), (26, "Fe"), (1, "H"), (8, "O"), (-1, "other")]
@@ -77,7 +77,9 @@ for g, T, S in SAMPLES:
     for z, nm in NUC[:-1]: m = Z[out_] == z; known |= m; d["out_by_nucleus"][nm] = float(wf[out_][m].sum() / Wo)
     d["out_by_nucleus"]["other"] = float(wf[out_][~known].sum() / Wo); d["out_frac"] = float(Wo / Wf)
     # stat error on the out-of-FV fraction (weighted binomial)
-    p = d["out_frac"]; neff = Wf ** 2 / (wf ** 2).sum(); d["out_frac_err"] = float(np.sqrt(p * (1 - p) / neff)); tab[g] = d
+    p = d["out_frac"]; neff = Wf ** 2 / (wf ** 2).sum(); d["out_frac_err"] = float(np.sqrt(p * (1 - p) / neff)); 
+    dz = np.abs(S["vtx"][f, 2] - T["vtx"][S["row"][f], 2]); d["vtx_tail_frac"] = float(wf[dz > 100].sum() / Wf)  # |reco - true z| > 100 mm among reco-FV
+    tab[g] = d
 R["origin"] = tab
 tex = "\\begin{tabular}{lcccccccc}\n\\toprule\n & reco-FV per true-FV event & true outside FV & upstream & downstream & outside hexagon & of which Pb & Fe & C \\\\\n\\midrule\n"
 for g, _, _ in SAMPLES:
@@ -100,7 +102,7 @@ def three_way(specs, sel_fn, fname, title=None, norm="truth"):
         for g, den in (("genie", "ref"), ("nuwro", "genie")):
             num, dn = H[g], H[den]; ok = dn[0] > 0; r = np.where(ok, num[0] / np.where(ok, dn[0], 1), np.nan)
             re = np.where(ok, r * np.sqrt((num[1] / np.maximum(num[0], 1e-15)) ** 2 + (dn[1] / np.where(ok, dn[0], 1)) ** 2), np.nan)
-            axr.errorbar(0.5 * (e[:-1] + e[1:]), r, re, fmt="o", ms=2.5, color=C[g], label="surrogate(GENIE) / open dataset" if g == "genie" else "surrogate(NuWro) / surrogate(GENIE)")
+            axr.errorbar(0.5 * (e[:-1] + e[1:]), r, re, fmt="o", ms=2.5, color=C[g], label="surrogate(GENIE) / open dataset" if g == "genie" else f"surrogate({a.gen_label}) / surrogate(GENIE)")
         axr.axhline(1, color="k", lw=0.6); axr.set_ylim(0.3, 1.7); axr.set_xlabel(xl); ax.set_xticklabels([])
         if logy: ax.set_yscale("log")
         res[xl] = {g: float(H[g][0].sum()) for g in H}
@@ -160,6 +162,7 @@ for g, nm in (("ref", "Ref"), ("genie", "Gen"), ("nuwro", "Nuw")):
     d = tab[g]; M[f"nOFV{nm}OutFrac"] = f"{100*d['out_frac']:.1f}\\%"; M[f"nOFV{nm}PerTrueFid"] = f"{d['recofid_per_truefid']:.3f}"
     for r in REG[1:]: M[f"nOFV{nm}{r.capitalize()}"] = f"{100*d['region'][r]:.1f}\\%"
     for nuc in ("Pb", "Fe", "C"): M[f"nOFV{nm}Out{nuc}"] = f"{100*d['out_by_nucleus'][nuc]:.0f}\\%"
+    M[f"nOFV{nm}VtxTail"] = f"{100*d['vtx_tail_frac']:.1f}\\%"; M[f"nOFV{nm}EffTrueFid"] = f"{d['eff_truefid']:.3f}"
 for k, kn in (("epi_exist", "Exist"), ("epi_card", "Card"), ("epi_flow", "Flow"), ("epi_vz", "Vz")): M[f"nOFVEpi{kn}AUC"] = f"{E[k]['auc_out_vs_in']:.2f}"; M[f"nOFVEpi{kn}NuwAUC"] = f"{E[k]['auc_nuwro_vs_genie_out']:.2f}"
-(out / "macros.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in M.items()))
+(out / "macros.tex").write_text("".join(f"\\newcommand{{\\{a.macro_prefix + k[4:]}}}{{{v}}}\n" for k, v in M.items()))
 print(json.dumps({"origin": tab, "epistemic": E}, indent=1, default=float))

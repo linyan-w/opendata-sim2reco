@@ -1,0 +1,28 @@
+\begin{tabular}{lc}
+\toprule
+Test & AUC \\
+\midrule
+real vs surrogate, reco vector only & 0.499 \\
+real vs surrogate, (truth features, reco vector) & 0.489 \\
+\midrule
+block: muon only & 0.500 \\
+block: vertex only & 0.501 \\
+block: calorimetry only & 0.508 \\
+truth features + flags and N only & 0.460 \\
+truth features + muon & 0.487 \\
+truth features + vertex & 0.489 \\
+truth features + calorimetry & 0.480 \\
+truth features + truth only & 0.448 \\
+single variable: log\_P\_ratio & 0.498 \\
+single variable: dtheta\_x & 0.500 \\
+single variable: dtheta\_y & 0.499 \\
+single variable: dvtx\_x & 0.498 \\
+single variable: dvtx\_y & 0.499 \\
+single variable: dvtx\_z & 0.504 \\
+single variable: log\_recoil\_E & 0.501 \\
+single variable: log\_recoil\_nonvtx100 & 0.501 \\
+single variable: log\_nonvtx\_iso\_blobs\_E & 0.504 \\
+\midrule
+max $|\Delta$corr$|$ over the 9 generated variables & 0.013 \\
+\bottomrule
+\end{tabular}

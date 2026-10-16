@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 
 from sim2reco.data.compact import CompactDataset, collate
 from sim2reco.io.writer import write_ntuple
+from sim2reco.io.deadtime import sample_deadtime, VARIABLE as DEADTIME_VARIABLE, DEFAULT_TABLE as DEADTIME_TABLE
 from sim2reco.prep.muon import decode_muon
 from sim2reco.prep.particles import context_from_tuple, in_population, reference_momentum, select_from_tuple
 from sim2reco.prep.prongs import decode as decode_prongs
@@ -43,6 +44,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("model_dir"); ap.add_argument("truth"); ap.add_argument("out")
     ap.add_argument("--n", type=int, default=None); ap.add_argument("--steps", type=int, default=64); ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--deadtime", default=DEADTIME_TABLE if pathlib.Path(DEADTIME_TABLE).exists() else None, help="empirical table of the dead-time cut variable (scripts/deadtime_study.py); drawn per event by reconstructed vertex z, independently of the event; '' to skip")
     ap.add_argument("--epi-draws", type=int, default=16, help="posterior weight draws for per-event epistemic uncertainties (0 = off); needs bayes_last.pt in MODEL_DIR")
     a = ap.parse_args()
     torch.manual_seed(a.seed)
@@ -107,10 +109,11 @@ def main():
         vc = torch.cat(VC).numpy()[exist]
         zs = tf.planes.z_for_class(vc, d["ctx"][exist, 2], y[:, 5]); y[:, 5] = np.where(vc > 0, zs, y[:, 5])
     minos, charge = S[exist, 1] > 0, S[exist, 2] > 0
-    out = {k: truth[k][exist] for k in PASSTHROUGH + [c for c in truth.fields if c.startswith(("nuwro_", "ref_"))]}  # generator-specific extras pass through
+    out = {k: truth[k][exist] for k in PASSTHROUGH + [c for c in truth.fields if c.startswith(("nuwro_", "gibuu_", "gen_", "ref_"))]}  # generator-specific extras pass through
     out.update(decode_muon(y[:, 0], y[:, 1], y[:, 2], minos, charge))
     vtx = np.zeros((exist.sum(), 4)); vtx[:, :3] = y[:, 3:6]
     out["MasterAnaDev_vtx"] = vtx; out["vtx"] = vtx.copy()
+    if a.deadtime: out[DEADTIME_VARIABLE] = sample_deadtime(vtx[:, 2], np.random.default_rng(a.seed + 7), a.deadtime)  # overlay dead time: not modelled, drawn from the open dataset's distribution
     out["MasterAnaDev_recoil_E"] = y[:, 6]; out["MasterAnaDev_recoil_E_wide_window"] = y[:, 6]; out["MasterAnaDev_hadron_recoil_CCInc"] = y[:, 6]
     out["MasterAnaDev_recoil_passivecorrected"] = y[:, 7]; out["MasterAnaDev_hadron_recoil_default"] = y[:, 7]
     out["MasterAnaDev_hadron_recoil"] = y[:, 8]; out["recoil_energy_nonmuon_nonvtx100mm"] = y[:, 9]; out["nonvtx_iso_blobs_energy"] = y[:, 10]

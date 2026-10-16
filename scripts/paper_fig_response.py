@@ -88,6 +88,11 @@ plots.save(fig, pathlib.Path(a.out + "_muon.png"))
 fig, ax = plots.plt.subplots(figsize=(4.2, 3.3))
 prof(ax, keh, "recoil", np.logspace(np.log10(30), np.log10(20000), 12)); ax.set_yscale("log"); ax.set_xlabel("true hadronic kinetic energy [MeV]"); ax.set_ylabel("median recoil energy [GeV]")
 plots.save(fig, pathlib.Path(a.out + "_recoil.png"))
+fig, (ax1, ax2) = plots.plt.subplots(1, 2, figsize=(8.4, 3.3))  # muon and recoil as two panels of one figure (paper)
+prof(ax1, Pt, "ratio", np.logspace(np.log10(0.5), np.log10(40), 13)); ax1.set_xlabel("true muon momentum [GeV]"); ax1.set_ylabel(r"median $P_\mathrm{reco}/P_\mathrm{true}$ of the muon")
+prof(ax2, keh, "recoil", np.logspace(np.log10(30), np.log10(20000), 12), legend=False); ax2.set_yscale("log"); ax2.set_xlabel("true hadronic kinetic energy [MeV]"); ax2.set_ylabel("median recoil energy [GeV]")
+ax1.text(0.03, 0.05, "(a)", transform=ax1.transAxes, va="bottom", fontsize=10); ax2.text(0.03, 0.95, "(b)", transform=ax2.transAxes, va="top", fontsize=10)
+plots.save(fig, pathlib.Path(a.out + "_response.png"))
 QF, QP = {"marker": "o", "ls": "-", "mfc": None}, {"marker": "s", "ls": "--", "mfc": "white"}
 e = np.array([50, 80, 120, 180, 270, 400, 600, 900, 1400, 2500])
 SPEC = [(x, key, hyp, sp) for x, key, hyp, sp in ((kep, "pP", "proton", "proton"), (kpi, "piP", "pion", "charged-pion")) if (x[S["open dataset"]["reco"]] >= e[0]).sum() >= 300]  # species absent from the sample (no pions in 2p2h) get no panel

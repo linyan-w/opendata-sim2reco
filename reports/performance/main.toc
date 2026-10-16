@@ -1,0 +1,57 @@
+\contentsline {section}{\numberline {1}Setup}{8}{section.1}%
+\contentsline {paragraph}{Data.}{8}{section*.4}%
+\contentsline {paragraph}{Inputs.}{8}{section*.5}%
+\contentsline {paragraph}{Splits and metrics.}{8}{section*.6}%
+\contentsline {section}{\numberline {2}Model}{8}{section.2}%
+\contentsline {paragraph}{Training.}{9}{section*.7}%
+\contentsline {section}{\numberline {3}Performance}{9}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Event classification heads}{9}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Muon, vertex and calorimetry}{13}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Hadron prongs}{16}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Vertex plane}{19}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Closure tests}{19}{subsection.3.5}%
+\contentsline {section}{\numberline {4}Holdout test: a 2p2h-blind surrogate}{22}{section.4}%
+\contentsline {paragraph}{Where 2p2h sits in input space.}{22}{section*.8}%
+\contentsline {paragraph}{Result.}{22}{section*.9}%
+\contentsline {paragraph}{What the residual was, and how it was removed.}{23}{section*.10}%
+\contentsline {paragraph}{How large is the loss of fidelity, and is it resolved?}{24}{section*.11}%
+\contentsline {paragraph}{Scope of the conclusion.}{25}{section*.12}%
+\contentsline {paragraph}{Is 2p2h reachable by reweighting?}{25}{section*.13}%
+\contentsline {section}{\numberline {5}Input definition: threshold and neutrons}{25}{section.5}%
+\contentsline {section}{\numberline {6}Zero flags for the calorimetric spikes}{26}{section.6}%
+\contentsline {section}{\numberline {7}Epistemic uncertainty from Bayesian last layers}{28}{section.7}%
+\contentsline {paragraph}{Does the flag detect the held-out mode?}{28}{section*.14}%
+\contentsline {paragraph}{Can the flag detect anything?}{28}{section*.15}%
+\contentsline {paragraph}{Is the uncertainty calibrated?}{28}{section*.16}%
+\contentsline {paragraph}{Misfit, not shift.}{30}{section*.17}%
+\contentsline {paragraph}{A model-error floor.}{30}{section*.18}%
+\contentsline {paragraph}{The non-calorimetry observable set.}{30}{section*.19}%
+\contentsline {paragraph}{Uncertainties in the output file.}{31}{section*.20}%
+\contentsline {subsection}{\numberline {7.1}Binned comparisons behind the pulls}{32}{subsection.7.1}%
+\contentsline {section}{\numberline {8}First application: NuWro through the surrogate}{42}{section.8}%
+\contentsline {paragraph}{What differs at truth level.}{42}{section*.21}%
+\contentsline {paragraph}{What differs at reconstructed level.}{42}{section*.22}%
+\contentsline {paragraph}{The response is a function of the final state.}{42}{section*.23}%
+\contentsline {paragraph}{Does the model find NuWro unfamiliar?}{43}{section*.24}%
+\contentsline {section}{\numberline {9}Full training volume: events from outside the fiducial volume}{45}{section.9}%
+\contentsline {paragraph}{Samples.}{45}{section*.25}%
+\contentsline {paragraph}{Where the selected events come from.}{45}{section*.26}%
+\contentsline {paragraph}{What the migrated events look like.}{45}{section*.27}%
+\contentsline {paragraph}{NuWro.}{46}{section*.28}%
+\contentsline {paragraph}{Does the model know these events are harder?}{46}{section*.29}%
+\contentsline {section}{\numberline {10}All-events models: CC and NC, all flavours}{47}{section.10}%
+\contentsline {paragraph}{Population.}{47}{section*.30}%
+\contentsline {paragraph}{What changes in the model.}{48}{section*.31}%
+\contentsline {paragraph}{Performance by subset.}{48}{section*.32}%
+\contentsline {paragraph}{2p2h holdout.}{48}{section*.33}%
+\contentsline {paragraph}{Calibration.}{49}{section*.34}%
+\contentsline {paragraph}{NuWro and paired GENIE.}{50}{section*.35}%
+\contentsline {paragraph}{NC: NuWro and paired GENIE.}{51}{section*.36}%
+\contentsline {section}{\numberline {11}Full dataset, full volume: inclusive NuWro and GiBUU samples}{54}{section.11}%
+\contentsline {paragraph}{Construction.}{54}{section*.37}%
+\contentsline {paragraph}{Generators.}{55}{section*.38}%
+\contentsline {paragraph}{Selected events and where they come from.}{55}{section*.39}%
+\contentsline {paragraph}{Epistemic flags.}{55}{section*.40}%
+\contentsline {paragraph}{The dead-time cut variable.}{55}{section*.41}%
+\contentsline {section}{\numberline {12}Known limitations}{57}{section.12}%
+\contentsline {section}{\numberline {A}Data conventions that had to be handled}{58}{appendix.A}%
