@@ -127,17 +127,15 @@ def load_model(path, device="cuda"):
 
 
 @torch.no_grad()
-def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64, seed=0, m1_metrics=None):
-    """Closure on the test split: Tier 0 / cardinality metrics, Tier 1 marginals + conditionals, classifier test."""
+def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64, seed=0, m1_metrics=None, samples=None):
+    """Closure on the test split: Tier 0 / cardinality metrics, Tier 1 marginals + conditionals, classifier test.
+    samples: a pre-drawn pass over idx_test (sim2reco.train.samples), else the model is sampled here."""
     out = pathlib.Path(out_dir); (out / "figures").mkdir(exist_ok=True); (out / "tables").mkdir(exist_ok=True)
-    torch.manual_seed(seed)
-    P0, PN, S = [], [], []
-    for b in ld_test:
-        b = to_dev(b, device)
-        s = model.sample(b, n_steps)
-        P0.append(s["p0"].cpu()); PN.append(s["pn"].cpu())
-        S.append(torch.cat([s["exist"][:, None].float(), s["minos"][:, None].float(), s["charge"][:, None].float(), s["nprong"][:, None].float(), s["x1"]], 1).cpu())
-    P0 = torch.cat(P0).numpy(); PN = torch.cat(PN).numpy(); S = torch.cat(S).numpy()
+    if samples is None:
+        from sim2reco.train.samples import sample_split
+        samples = sample_split(model, ld_test, n_steps, device, seed, prongs=False)
+    P0, PN = samples["p0"], samples["pn"]
+    S = np.column_stack([samples["exist"].astype(np.float32), samples["minos"].astype(np.float32), samples["charge"].astype(np.float32), samples["nprong"].astype(np.float32), samples["x1"]])
     t0 = d["tier0"][idx_test]; reco = t0[:, 0] > 0; minos = reco & (t0[:, 1] > 0)
     M = {"n_test": int(len(idx_test))}
     M["tier0"] = {"reco_exists": binary_metrics(t0[:, 0].astype(int), P0[:, 0]),

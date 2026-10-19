@@ -9,22 +9,22 @@
    "auc_vs_nominal": 0.49992700833333326
   },
   "flow": {
-   "median_ratio": 1.000316858291626,
-   "auc_vs_nominal": 0.4982474983333333
+   "median_ratio": 0.9982005953788757,
+   "auc_vs_nominal": 0.4983300577777778
   }
  },
  "tokens_x3": {
   "exist": {
-   "median_ratio": 1.1559027433395386,
-   "auc_vs_nominal": 0.5656083561111112
+   "median_ratio": 1.1533921957015991,
+   "auc_vs_nominal": 0.565595225
   },
   "card": {
-   "median_ratio": 1.0680296421051025,
-   "auc_vs_nominal": 0.5262948355555555
+   "median_ratio": 1.06898033618927,
+   "auc_vs_nominal": 0.526222571111111
   },
   "flow": {
-   "median_ratio": 1.0132873058319092,
-   "auc_vs_nominal": 0.5111356166666666
+   "median_ratio": 1.0070797204971313,
+   "auc_vs_nominal": 0.5102320733333333
   }
  },
  "vtx_upstream": {
@@ -37,22 +37,22 @@
    "auc_vs_nominal": 0.997274083888889
   },
   "flow": {
-   "median_ratio": 2.20196270942688,
-   "auc_vs_nominal": 0.8466396577777778
+   "median_ratio": 2.1943156719207764,
+   "auc_vs_nominal": 0.8456930583333333
   }
  },
  "all": {
   "exist": {
-   "median_ratio": 12.616724014282227,
-   "auc_vs_nominal": 0.9963597488888889
+   "median_ratio": 12.61044979095459,
+   "auc_vs_nominal": 0.9963591949999999
   },
   "card": {
-   "median_ratio": 11.918399810791016,
-   "auc_vs_nominal": 0.9968602105555554
+   "median_ratio": 11.917769432067871,
+   "auc_vs_nominal": 0.9968614255555557
   },
   "flow": {
-   "median_ratio": 1.608182668685913,
-   "auc_vs_nominal": 0.7586020677777777
+   "median_ratio": 1.6023911237716675,
+   "auc_vs_nominal": 0.7577755627777778
   }
  }
 }

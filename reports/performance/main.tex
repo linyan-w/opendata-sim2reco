@@ -8,13 +8,10 @@
 \usepackage{placeins}
 \input{../m3_1A_z/numbers.tex}
 \input{../m3_1A_z/zero_compare_macros.tex}
-\input{../nuwro_compare/macros.tex}
 \input{../bayes_1A_z/subset_NB_macros.tex}
 \input{../bayes_1A_z/subset_CI_macros.tex}
 \input{../m3_1A_z/closure_ccinc_macros.tex}
-\input{../outfv/macros.tex}
 \input{../all_events/macros.tex}
-\input{../nuwro_compare_nc/macros.tex}
 \input{../inclusive/macros.tex}
 \input{../inclusive_gibuu/macros.tex}
 \input{../inclusive/macros_inc.tex}
@@ -356,6 +353,20 @@ surrogate reproduces both fractions (\nSnapFake{}, \nSnapNearFake{}) and the dis
 offset to the nearest plane, including the continuum of unsnapped vertices ($W_1 = \nSnapWone{}$\,mm,
 Fig.~\ref{fig:vtxplane}). The class head has test log loss \nVtxLL{} against \nVtxLLmarg{} for the marginal,
 evaluated with sampled flags and multiplicity as its conditions.
+
+The head and the event flow's continuous $z$ were at first sampled independently given the conditions, which lost
+the tails of the reconstructed-minus-true $z$ at decode time: a ``near'' class overrode a far $z$, and a ``far''
+class landed on a near plane when the flow's $z$ happened to be near. The flow's own $z$ had the right tails
+(15.0\% of CC $\nu_\mu$ test events beyond 100\,mm against 15.3\% in the open dataset) and the class marginals
+were right, but the decoded $z$ had 10.5\%, and among the surrogate's far-class events only 53\% were actually
+far against 94\% in the data. The adopted head therefore receives, besides the conditions and the phase, a
+near/far indicator of the flow's $z$ (a smooth step of $|z_\mathrm{reco} - z_\mathrm{true}|$ at three planes),
+trained alone with the rest of the network frozen (\texttt{vtx\_cond\_z}, Section~\ref{sec:inclusive} for the
+effect on the migration into the fiducial volume). With it the decoded tails match the flow's (14.9\%), the
+class marginals are unchanged, and the closure classifier given the truth and the reconstructed $z$ falls from
+0.543 to \nAUCvtxz{}. Giving the head the raw $z$ residual instead restores the tails as well but lets it choose
+the near plane from the flow's smooth core, which puts 13\% too few events on the nearest plane; the indicator
+keeps that choice as it was.
 
 \begin{figure}[h]\centering
 \includegraphics[width=0.75\textwidth]{../m3_1A_z/figures/m3_vertex.png}
@@ -973,212 +984,15 @@ surrogate-side uncertainty can be read directly. The bins are those of Table~\re
 \FloatBarrier
 
 
-\section{First application: NuWro through the surrogate}
-\label{sec:nuwro}
-
-The surrogate's purpose is to give reconstructed-level predictions for events the released simulation does not
-contain, and a second generator is the first realistic case. A NuWro 25.11.1 sample of \nNWnNuwro{} CC $\nu_\mu$
-events on the tracker's scintillator composition (carbon 91\%, hydrogen 5\%, oxygen 2.5\%, titanium, silicon,
-aluminium, nitrogen, chlorine; unweighted within each nucleus) was converted to the open-dataset Truth layout:
-the post-FSI particles rotated from the beam frame into detector coordinates, and, since NuWro has no detector
-geometry, each event given a vertex drawn from the open dataset's fiducial tracker events with the same target
-nucleus, so that the position-to-nucleus correlation of the real detector is kept. The reference is a sample of
-\nNWnGenie{} open-dataset events with the true vertex in the same fiducial tracker volume, for which the open
-dataset's own reconstruction is available. Both samples are run through model A, and three things are compared:
-the open dataset's reconstruction of the GENIE events, the surrogate on the GENIE events, and the surrogate on
-the NuWro events. The first pair is the closure of Section~\ref{sec:perf} on this sample; the second pair is the
-generator difference as seen through the detector.
-
-\paragraph{What differs at truth level.} Table~\ref{tab:nw-truth} and Fig.~\ref{fig:nw-truth} show the inputs.
-The channel composition differs as expected between the generators: NuWro has \nNWNuwFracRES{} resonant and
-\nNWNuwFracDIS{} deep-inelastic events against \nNWGenFracRES{} and \nNWGenFracDIS{} in GENIE, with the
-quasi-elastic and 2p2h shares equal; the lepton-defined $W$ shows NuWro's sharper quasi-elastic peak and dip.
-NuWro produces fewer hadron tokens above 10\,MeV (\nNWNuwMeanNhad{} against \nNWGenMeanNhad{} per event) while
-carrying more hadronic kinetic energy (\nNWNuwMeanKeh{} against \nNWGenMeanKeh{}\,MeV), i.e.\ fewer and harder
-hadrons. One difference is not physics: the NuWro run was driven by a binned flux card whose high-energy tail is
-harder than the flux of the open-dataset simulation, visible above 12\,GeV in $E_\nu$ and in the muon momentum;
-it propagates to the reconstructed muon momentum and should be read as a flux-input difference.
-
-\begin{table}[h]\centering\footnotesize
-\input{../nuwro_compare/tables/truth_composition.tex}
-\caption{Truth-level composition of the two fiducial-tracker samples.}
-\label{tab:nw-truth}
-\end{table}
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../nuwro_compare/figures/truth_level.png}
-\caption{Truth-level comparison of the GENIE (open dataset) and NuWro samples: neutrino energy, true muon
-momentum and angle, lepton-defined $Q^2$ and $W$, hadron tokens after the input cuts, true hadronic kinetic
-energy, and channel composition.}
-\label{fig:nw-truth}
-\end{figure}
-
-\paragraph{What differs at reconstructed level.} Figure~\ref{fig:nw-reco} and Table~\ref{tab:nw-reco} give the
-three-way comparison, normalised per truth event so that efficiency differences are visible. The surrogate on
-GENIE reproduces the open dataset on this sample as in Section~\ref{sec:perf}: reconstruction fraction
-\nNWGenRecoFrac{} against \nNWRefRecoFrac{}, zero fractions and mean recoil equal to three digits, ratios within a
-few percent except at the sparse ends. The surrogate on NuWro then shows the generator difference: a
-reconstruction fraction of \nNWNuwRecoFrac{}, a mean recoil of \nNWNuwMeanRecoil{}\,MeV against
-\nNWGenMeanRecoil{}, a recoil spectrum depleted by up to a factor two below 100\,MeV and enhanced by 20 to 30\% in
-the multi-GeV tail, the same pattern in the non-vertex and isolated-blob energies, slightly fewer exact zeros
-(\nNWNuwZeroBlobs{} against \nNWGenZeroBlobs{} for the blobs), and a harder reconstructed muon spectrum above
-7\,GeV that follows the flux tail. These are the fewer-and-harder hadrons of Table~\ref{tab:nw-truth} seen through
-the calorimeter.
-
-\begin{table}[h]\centering\footnotesize
-\input{../nuwro_compare/tables/summary.tex}
-\caption{Reconstructed-level summary per sample. The open dataset's MINOS-match fraction is not attached to the
-reference columns.}
-\label{tab:nw-reco}
-\end{table}
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../nuwro_compare/figures/reco_level.png}
-\caption{Reconstructed-level comparison, events per truth event: the open dataset's reconstruction of the GENIE
-events, the surrogate on the same GENIE events, and the surrogate on the NuWro events. Lower panels: surrogate
-on GENIE over open dataset (closure) and surrogate on NuWro over surrogate on GENIE (generator difference). The
-first bin of the two calorimetric quantities holds the exact zeros.}
-\label{fig:nw-reco}
-\end{figure}
-
-\paragraph{The response is a function of the final state.} Figure~\ref{fig:nw-cond} is the check that the
-reconstructed-level differences are the generators' and not the surrogate's. Conditional on truth, the
-reconstruction probability versus neutrino energy, the recoil versus true hadronic kinetic energy and the muon
-momentum response versus true momentum lie on top of each other for the open dataset, the surrogate on GENIE and
-the surrogate on NuWro. The one visible departure, the reconstruction probability at high hadron-token count,
-where NuWro sits two to three percent above GENIE, is a composition effect within the bin, since the two
-generators fill a bin of equal token count with different particles and energies. The marginal distributions
-differ because the inputs differ; the detector response the surrogate applies to them is the same.
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../nuwro_compare/figures/conditional_response.png}
-\caption{Detector response conditional on truth for the three samples: reconstruction probability versus true
-neutrino energy and versus hadron-token count, mean $\log_{10}$ of the reconstructed recoil versus true hadronic
-kinetic energy, and median muon momentum response versus true momentum.}
-\label{fig:nw-cond}
-\end{figure}
-
-\paragraph{Does the model find NuWro unfamiliar?} It does not, and it should not. Figure~\ref{fig:nw-epi}
-compares the per-event epistemic quantities of Section~\ref{sec:bayes} between the two samples: the median
-ratios NuWro to GENIE are \nNWEpiExistRatio{} for the reconstruction-flag variance, \nNWEpiCardRatio{} for the
-multiplicity-logit variance and \nNWEpiFlowRatio{} for the event-flow flag, with classifier AUCs of
-\nNWEpiExistAUC{}, \nNWEpiCardAUC{} and \nNWEpiFlowAUC{} between the samples, and the relative epistemic widths of
-the written-out recoil and muon momentum are within a few percent of each other. Every NuWro final state is an
-ordinary set of particles at ordinary momenta on the same nuclei at the same vertices; the generator difference
-is a composition shift inside the training support, the case Section~\ref{sec:holdout} established the surrogate
-transfers across. The uncertainty to attach to the NuWro prediction is therefore the model-error floor of
-Section~\ref{sec:bayes}, measured on the open dataset and carried over unchanged, plus the small epistemic term.
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../nuwro_compare/figures/epistemic_flags.png}
-\caption{Per-event epistemic quantities of the surrogate on the GENIE and on the NuWro samples: reconstruction-flag
-logit variance, mean multiplicity-logit variance and event-flow flag.}
-\label{fig:nw-epi}
-\end{figure}
-\FloatBarrier
-
-\section{Full training volume: events from outside the fiducial volume}
-\label{sec:fullvol}
-
-The preceding sections report on CC $\nu_\mu$ events in the tracker fiducial volume, as the paper does. An analysis
-selects on the \emph{reconstructed} vertex, however, and about a tenth of the events reconstructed in the fiducial
-volume have their true vertex outside it: upstream in the nuclear targets (lead, iron, carbon, water), downstream,
-or transversely outside the fiducial hexagon. A generator prediction for such an analysis needs these events too.
-The surrogate was trained on every CC $\nu_\mu$ interaction with true vertex $4000 \le z \le 8700$\,mm without a
-transverse cut, so its training volume contains all of them; this section tests it there, with model A of
-Sections~\ref{sec:perf}--\ref{sec:nuwro}.
-
-\paragraph{Samples.} The GENIE reference is \nOFVnGenie{} open-dataset CC $\nu_\mu$ events drawn from the full
-training volume, with their own reconstruction. The NuWro sample (\nOFVnNuwro{} events) combines the tracker-nuclei
-campaign of Section~\ref{sec:nuwro} with dedicated lead and iron campaigns (2.20\,M and 0.56\,M events); every
-event receives a vertex drawn from the open dataset's CC $\nu_\mu$ vertices in the full volume on the same nucleus,
-and a per-nucleus weight brings the nucleus shares to those of the open dataset in that volume (the campaigns are
-generated per nucleus, so their own shares are arbitrary). The selection is the analysis one: reconstructed vertex
-in the fiducial volume.
-
-\paragraph{Where the selected events come from.} Table~\ref{tab:ofv-origin} and Fig.~\ref{fig:ofv-vtx} give the
-origin of the reconstructed-fiducial events. In the open dataset \nOFVRefOutFrac{} have their true vertex outside
-the fiducial volume, \nOFVRefUpstream{} upstream, \nOFVRefTransverse{} outside the hexagon and
-\nOFVRefDownstream{} downstream; of those outside, \nOFVRefOutPb{} are on lead, \nOFVRefOutFe{} on iron and
-\nOFVRefOutC{} on carbon. The surrogate on the same GENIE events gives \nOFVGenOutFrac{} (\nOFVGenUpstream{},
-\nOFVGenTransverse{}, \nOFVGenDownstream{}; \nOFVGenOutPb{}, \nOFVGenOutFe{}, \nOFVGenOutC{}), and the number of
-reconstructed-fiducial events per true-fiducial event is \nOFVGenPerTrueFid{} against \nOFVRefPerTrueFid{}.
-Transverse migration is reproduced; upstream migration is short by about a tenth. The cause is visible in the
-right panel of Fig.~\ref{fig:ofv-vtx}: the core of the reconstructed-minus-true vertex $z$ residual is right, but
-its tails beyond 100\,mm are about 30\% low (\nOFVGenVtxTail{} of reconstructed-fiducial events against
-\nOFVRefVtxTail{}), and an upstream event enters the fiducial volume only through such a tail. The vertex flow
-fits the bulk of the residual and underweights the long tails, which matter little for events well inside the
-volume and set the migration across its upstream face. This is the main limitation found in the full volume.
-
-\begin{table}[h]\centering\footnotesize
-\resizebox{\textwidth}{!}{\input{../outfv/tables/origin.tex}}
-\caption{Events with the reconstructed vertex in the fiducial volume: number per event with the true vertex in
-it, fraction with the true vertex outside (with its statistical error), split by region and, for those outside,
-by nucleus. Model A (CC $\nu_\mu$).}
-\label{tab:ofv-origin}
-\end{table}
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../outfv/figures/true_vertex_recofid.png}
-\caption{Events with the reconstructed vertex in the fiducial volume, per truth event: true vertex $z$, true
-transverse position in units of the hexagon apothem, and reconstructed minus true vertex $z$.}
-\label{fig:ofv-vtx}
-\end{figure}
-
-\paragraph{What the migrated events look like.} Figure~\ref{fig:ofv-mig} shows the reconstructed quantities of the
-events with the true vertex outside and the reconstructed vertex inside the fiducial volume. Their shapes are
-reproduced (the low-momentum, high-recoil events that the out-of-volume vertices favour), and the normalisation
-carries the deficit of upstream migration above, mostly at small muon angle. Figure~\ref{fig:ofv-frac} gives the
-fraction of reconstructed-fiducial events with the true vertex outside as a function of the muon momentum, the
-recoil and the reconstructed vertex $z$: it rises to about 35\% below 1\,GeV of muon momentum, to 30\% at the
-highest recoil and near the upstream face, and the surrogate follows the open dataset in all three, slightly low
-near the upstream face for the reason above.
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../outfv/figures/migrated_reco.png}
-\caption{Events with the true vertex outside and the reconstructed vertex inside the fiducial volume:
-reconstructed muon momentum and angle, recoil and prong count, per truth event.}
-\label{fig:ofv-mig}
-\end{figure}
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../outfv/figures/outfv_fraction.png}
-\caption{Fraction of reconstructed-fiducial events with the true vertex outside the fiducial volume versus
-reconstructed muon momentum, recoil and vertex $z$.}
-\label{fig:ofv-frac}
-\end{figure}
-
-\paragraph{NuWro.} With NuWro, the fraction from outside is \nOFVNuwOutFrac{} (\nOFVNuwUpstream{} upstream,
-\nOFVNuwTransverse{} outside the hexagon; \nOFVNuwOutPb{} on lead and \nOFVNuwOutFe{} on iron), within a percent of
-the surrogate on GENIE in relative terms per region, so the generator difference does not change the composition of
-the selected sample by origin. The migrated NuWro events show the same harder-hadron pattern as in
-Section~\ref{sec:nuwro} (Fig.~\ref{fig:ofv-mig}).
-
-\paragraph{Does the model know these events are harder?} Among the reconstructed-fiducial events of the
-surrogate on GENIE, the per-event epistemic quantities of Section~\ref{sec:bayes} separate true-outside from
-true-inside events with AUC \nOFVEpiExistAUC{} (reconstruction flag), \nOFVEpiCardAUC{} (multiplicity),
-\nOFVEpiFlowAUC{} (event flow) and \nOFVEpiVzAUC{} (vertex $z$ spread over the posterior draws)
-(Fig.~\ref{fig:ofv-epi}): the out-of-volume events, fewer in training and on heavier nuclei, carry a larger
-epistemic term, as they should. Between NuWro and GENIE out-of-volume events the same quantities give AUC
-\nOFVEpiExistNuwAUC{} to \nOFVEpiCardNuwAUC{}: the generator again stays inside the training support.
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../outfv/figures/epistemic_outfv.png}
-\caption{Per-event epistemic quantities of the surrogate on GENIE for reconstructed-fiducial events, with the true
-vertex inside (solid) and outside (dashed) the fiducial volume.}
-\label{fig:ofv-epi}
-\end{figure}
-\FloatBarrier
-
 \section{All-events models: CC and NC, all flavours}
 \label{sec:allevents}
 
 Everything above is for the CC $\nu_\mu$ population. This section repeats the main steps with a model trained on
 every interaction in the open dataset's training volume, with the same configuration otherwise (10\,MeV input
 threshold with neutrons, zero flags, length-bucketed batches, two-stage training, Bayesian last layers): model A
-on all events, the 2p2h-blind model B, the 2p2h holdout of Section~\ref{sec:holdout}, the calibration of
-Section~\ref{sec:bayes}, and the NuWro and paired GENIE samples of Section~\ref{sec:nuwro}. The CC $\nu_\mu$ models
-of the earlier sections are unchanged and remain the reference.
+on all events, the 2p2h-blind model B, the 2p2h holdout of Section~\ref{sec:holdout} and the calibration of
+Section~\ref{sec:bayes}. This is the model behind the inclusive generator samples of Section~\ref{sec:inclusive}.
+The CC $\nu_\mu$ models of the earlier sections are unchanged and remain the reference.
 
 \paragraph{Population.} The training volume holds \nAEnEvents{} interactions (Table~\ref{tab:ae-comp}), of which
 \nAEFracCCnumu{} are CC $\nu_\mu$, \nAEFracNC{} neutral current, \nAEFracCCnumubar{} CC $\bar\nu_\mu$ and
@@ -1298,103 +1112,13 @@ comparison; the all-events control is shown for completeness.}
 \label{tab:ae-cal}
 \end{table}
 
-\paragraph{NuWro and paired GENIE.} The NuWro and GENIE samples of Section~\ref{sec:nuwro} are CC $\nu_\mu$ only,
-so the all-events model sees the same events as the CC $\nu_\mu$ model, and the comparison checks that the two
-give the same predictions there (Table~\ref{tab:ae-nuwro}, Fig.~\ref{fig:ae-nw}). They do: on GENIE the
-reconstruction fraction is \nAENWAllGenReco{} and the mean recoil \nAENWAllGenRecoil{}\,MeV against
-\nAENWRefReco{} and \nAENWRefRecoil{}\,MeV in the open dataset; on NuWro \nAENWAllNuwReco{} and
-\nAENWAllNuwRecoil{}\,MeV, a recoil shift of \nAENWAllRecoilShift{} against \nAENWCCRecoilShift{} through the CC
-$\nu_\mu$ model, and the largest epistemic AUC between the samples is \nAENWAllEpiAUC{} (\nAENWCCEpiAUC{}). The
-generator difference seen through the detector does not depend on which of the two models is used. The NC
-comparison below uses a separate NuWro NC sample; a $\bar\nu_\mu$ comparison would need a NuWro sample of that
-channel, which has not been produced.
-
-\begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../all_events/tables/nuwro.tex}}
-\caption{NuWro and paired GENIE (fiducial tracker, CC $\nu_\mu$) through the CC $\nu_\mu$ and the all-events
-model A: reconstruction fraction, MINOS-matched fraction among reconstructed events, mean recoil, fractions of
-exact zeros of the non-vertex and isolated-blob energies, and mean prong count.}
-\label{tab:ae-nuwro}
-\end{table}
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../nuwro_compare_all/figures/reco_level.png}
-\caption{As Fig.~\ref{fig:nw-reco}, with the all-events model A.}
-\label{fig:ae-nw}
-\end{figure}
-
-\paragraph{NC: NuWro and paired GENIE.} A NuWro 25.11.1 sample of \nNCnNuwro{} NC $\nu_\mu$ events on the
-tracker nuclei was converted as in Section~\ref{sec:nuwro} (post-FSI particles rotated into the detector frame,
-vertices drawn per nucleus from the open dataset's fiducial tracker events; the outgoing neutrino is the primary
-lepton). The reference is the \nNCnGenie{} open-dataset NC $\nu_\mu$ events with the true vertex in the same
-fiducial volume, with their own reconstruction. Both are run through the all-events model A
-(Tables~\ref{tab:ae-nc-truth} and~\ref{tab:ae-nc-reco}, Figs.~\ref{fig:ae-nc-reco} and~\ref{fig:ae-nc-cond}).
-At truth level NuWro has more resonant and fewer deep-inelastic events (\nNCNuwFracRES{} and \nNCNuwFracDIS{}
-against \nNCGenFracRES{} and \nNCGenFracDIS{}) and, as for CC, fewer and harder hadrons (\nNCNuwMeanNhad{}
-against \nNCGenMeanNhad{} tokens, \nNCNuwMeanKeh{} against \nNCGenMeanKeh{}\,MeV of hadronic kinetic energy);
-neither generator has NC 2p2h here.
-
-The surrogate on GENIE reproduces the open dataset's reconstruction of the NC events: reconstruction fraction
-\nNCGenRecoFrac{} against \nNCRefRecoFrac{}, mean recoil \nNCGenMeanRecoil{} against \nNCRefMeanRecoil{}\,MeV,
-exact-zero fractions and mean prong count equal to the quoted digits, and the reconstruction probability as a
-function of neutrino energy and of the number of hadrons on top of the open dataset. Through the surrogate,
-NuWro NC events are reconstructed slightly more often (\nNCNuwRecoFrac{}) with more recoil
-(\nNCNuwMeanRecoil{}\,MeV), more events below 100\,MeV of recoil, and a harder muon candidate above a few GeV.
-The per-event epistemic quantities separate the two samples with AUC \nNCEpiExistAUC{} to \nNCEpiFlowAUC{}, as
-for CC: NuWro's NC final states lie inside the training support.
-
-Two conditional curves differ more than for CC (Fig.~\ref{fig:ae-nc-cond}). At a fixed number of hadron tokens
-NuWro events are reconstructed five to ten points more often: an NC event has a muon candidate only if a hadron
-track is promoted to that role, so the harder hadrons of NuWro weigh more than in CC, where the muon decides. And
-at low hadronic kinetic energy NuWro events carry more recoil, because the hadronic-energy axis leaves out
-photons: among events below 150\,MeV of hadronic kinetic energy, \nNCNuwLowKehGamFrac{} of NuWro events contain a
-photon and the photon energy averages \nNCNuwLowKehGamE{}\,MeV per event, against \nNCGenLowKehGamFrac{} and
-\nNCGenLowKehGamE{}\,MeV in GENIE. Binned in visible kinetic energy, which counts photons and excludes neutrons
-(Table~\ref{tab:ae-nc-vis}), the surrogate on GENIE follows the open dataset to a few thousandths in every bin and
-NuWro differs from it by one to two points, the residual of how the two generators share a given visible energy
-among particles. Both differences are therefore composition effects within the bins, not a change of the response.
-
-\begin{table}[h]\centering\footnotesize
-\resizebox{\textwidth}{!}{\input{../nuwro_compare_nc/tables/truth_composition.tex}}
-\caption{Truth-level composition of the fiducial-tracker NC $\nu_\mu$ samples.}
-\label{tab:ae-nc-truth}
-\end{table}
-
-\begin{table}[h]\centering\footnotesize
-\resizebox{\textwidth}{!}{\input{../nuwro_compare_nc/tables/summary.tex}}
-\caption{NC reconstructed-level summary through the all-events model A. For NC events the MINOS-matched
-fraction is about one percent; the open dataset's is not attached to the reference.}
-\label{tab:ae-nc-reco}
-\end{table}
-
-\begin{table}[h]\centering\footnotesize
-\input{../nuwro_compare_nc/tables/preco_vs_visible.tex}
-\caption{NC reconstruction probability in bins of visible kinetic energy (electrons, photons and hadrons other
-than neutrons, after the input cuts).}
-\label{tab:ae-nc-vis}
-\end{table}
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../nuwro_compare_nc/figures/reco_level.png}
-\caption{As Fig.~\ref{fig:nw-reco}, for the NC samples through the all-events model A. The ``muon'' is the
-reconstructed muon candidate.}
-\label{fig:ae-nc-reco}
-\end{figure}
-
-\begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../nuwro_compare_nc/figures/conditional_response.png}
-\caption{As Fig.~\ref{fig:nw-cond}, for the NC samples. The last panel is the median ratio of the muon
-candidate's momentum to the reference momentum of Section~\ref{sec:allevents}.}
-\label{fig:ae-nc-cond}
-\end{figure}
 \FloatBarrier
 
 \section{Full dataset, full volume: inclusive NuWro and GiBUU samples}
 \label{sec:inclusive}
 
-The tests so far take one population at a time: CC $\nu_\mu$ in the fiducial volume (as the paper), CC $\nu_\mu$
-over the full training volume (Section~\ref{sec:fullvol}), NC $\nu_\mu$ in the tracker (Section~\ref{sec:allevents}).
-What an analysis would actually do with a new generator is replace the open dataset's simulation wholesale: one
+The tests so far are on the CC $\nu_\mu$ events the paper reports on, in the fiducial volume. What an analysis
+would actually do with a new generator is replace the open dataset's simulation wholesale: one
 sample with the open dataset's exposure and composition, every flavour and current, every nucleus, over the whole
 training volume, passed through the surrogate in one go. This section builds that sample for NuWro and for GiBUU
 and runs both through the all-events model A of Section~\ref{sec:allevents}, with the open dataset's own events
@@ -1427,9 +1151,12 @@ the open dataset's exposure.}
 \label{tab:inc-comp}
 \end{table}
 
-\paragraph{Generators.} NuWro 25.11.1 is the one of Section~\ref{sec:nuwro}, with twelve further campaigns for
-$\bar\nu_\mu$, $\nu_e$ and $\bar\nu_e$, CC and NC, on the tracker nuclei and on lead and iron, converted as before.
-GiBUU (Release 2025, patch 5, with its own MINERvA ME job card: all channels, in-medium widths) was run by the
+\paragraph{Generators.} NuWro 25.11.1 was run by the colleague as sixteen campaigns, one neutrino species
+($\nu_\mu$, $\bar\nu_\mu$, $\nu_e$, $\bar\nu_e$), CC or NC, on the tracker nuclei (jobs stratified by the scintillator
+composition) or on lead and iron, under the published ME FHC flux of that species. Each campaign is converted to the
+open dataset's truth layout: the post-FSI particle list rotated from the beam frame into the detector frame, the
+primary lepton (the outgoing neutrino for NC) identified, $Q^2$ and the lepton-defined $W$ computed, NuWro's
+channel codes mapped to the open dataset's interaction types, and the vertex drawn as described above. GiBUU (Release 2025, patch 5, with its own MINERvA ME job card: all channels, in-medium widths) was run by the
 colleague as sixteen campaigns of the same layout, 7.3\,M events, one nucleus per job, written in its
 \texttt{FinalEvents} format with equal event weights by rejection against a ceiling; the two percent of events
 above the ceiling keep their own, larger weight, carried into the sample weight. GiBUU particle identifiers map to
@@ -1438,21 +1165,41 @@ PDG codes by identifier and charge; its production codes map to the interaction 
 with deep-inelastic, where GENIE's model places them). On carbon GiBUU is 72\% deep-inelastic, 16\% resonant,
 9\% quasi-elastic and 3\% 2p2h for CC $\nu_\mu$, against 66\%, 20\%, 11\% and 3\% in the open dataset.
 
-\paragraph{Selected events and where they come from.} Table~\ref{tab:inc-origin} is the full-volume accounting
-of Section~\ref{sec:fullvol} for the inclusive samples. The surrogate on the GENIE events reproduces the open
-dataset's rate of reconstructed-fiducial events per event (\nIncGenRecoFrac{} against \nIncRefRecoFrac{}) and,
-with the same deficit of upstream migration as before (12.3\% from outside the fiducial volume against 13.0\%,
-the vertex-$z$ tails being the cause), the origin of the selected events by region and nucleus. NuWro gives
+\paragraph{Selected events and where they come from.} An analysis selects on the \emph{reconstructed} vertex,
+and a fraction of the events reconstructed in the fiducial volume have their true vertex outside it: upstream in
+the nuclear targets (lead, iron, carbon, water), downstream, or outside the fiducial hexagon. Table~\ref{tab:inc-origin}
+gives this accounting for the inclusive samples: the number of reconstructed-fiducial events per event, and the
+origin of those events by region and nucleus. The surrogate on the GENIE events reproduces the open dataset's
+rate of reconstructed-fiducial events per event (\nIncGenRecoFrac{} against \nIncRefRecoFrac{}) and the fraction
+with the true vertex outside the fiducial volume (\nIncGBGenOutFrac{} against \nIncGBRefOutFrac{};
+\nIncGBGenUpstream{} against \nIncGBRefUpstream{} upstream), with the same nucleus mix among them. NuWro gives
 \nIncNuwRecoFrac{} reconstructed-fiducial events per event and GiBUU \nIncGibRecoFrac{}; the differences from
 GENIE are of the size of the generators' differences in NC share and in hadronic final states, and the fraction
 from outside the fiducial volume, its split by region and its nucleus composition agree with GENIE within a
 percent of the selected sample for both generators. Figures~\ref{fig:inc-reco-nuwro} and~\ref{fig:inc-reco-gibuu}
 show the reconstructed quantities of the selected events. NuWro differs from GENIE in the recoil energy below
-100\,MeV (half the rate at 10\,MeV, from its fewer and harder hadrons, as in Sections~\ref{sec:nuwro}
-and~\ref{sec:allevents}) and above 10\,GeV (20\% more), and in the muon momentum above 10\,GeV (20\% more);
+100\,MeV (half the rate at 10\,MeV, from its fewer and harder hadrons) and above 10\,GeV (20\% more), and in the muon momentum above 10\,GeV (20\% more);
 GiBUU is closer to GENIE at low recoil, 15\% below it around 1\,GeV and 30\% above it above 10\,GeV, with 25\%
 more muons above 10\,GeV. These are generator differences rendered by one detector response; the surrogate's own
-residual against the open dataset, the orange points, stays within a few percent everywhere.
+residual against the open dataset, the orange points, stays within a few percent everywhere. The NuWro file,
+its row of Table~\ref{tab:inc-origin} and Fig.~\ref{fig:inc-reco-nuwro} were made before the vertex-head change
+below and are not regenerated; the GENIE and GiBUU files are the current ones.
+
+\paragraph{Vertex-$z$ tails and the migration into the fiducial volume.} A closure test of the MINERvA~101
+selection on the inclusive GENIE sample found the purity of the surrogate's selected sample a few tenths of a
+percent above the open dataset's, all of it from one background: $\nu_\mu$ CC events with the true vertex outside
+the analysis volume and the reconstructed vertex inside. The surrogate let fewer of them in because its
+reconstructed-minus-true vertex $z$ had thinner tails than the reconstruction (19.3\% of reconstructed-fiducial
+events beyond 100\,mm against 25.1\%), and an upstream event enters the fiducial volume only through such a
+tail: 12.3\% of the selected events came from outside against 13.0\%, 7.1\% from upstream against 7.9\%. The
+deficit was the same fraction everywhere (by true $z$, muon angle, nucleus, CC and NC), which pointed at the
+decoding of $z$ rather than at any event class, and Section~\ref{sec:vertex} gives the cause and the cure: the
+plane-class head and the flow's $z$ were sampled independently, and the head now sees whether the flow's $z$ is
+far. With the corrected head the same accounting gives \nIncGBGenVtxTail{} of reconstructed-fiducial events
+beyond 100\,mm against \nIncGBRefVtxTail{}, \nIncGBGenOutFrac{} from outside against \nIncGBRefOutFrac{}
+and \nIncGBGenUpstream{} from upstream against \nIncGBRefUpstream{} (Table~\ref{tab:inc-origin}); nothing was
+reweighted, the head was retrained to be consistent with the rest of the model, and all other heads and flows are
+unchanged.
 
 \begin{table}[h]\centering\footnotesize
 \resizebox{\textwidth}{!}{\input{../inclusive/tables/origin_both.tex}}
@@ -1478,8 +1225,8 @@ NuWro over GENIE, both through the surrogate.}
 \label{fig:inc-reco-gibuu}
 \end{figure}
 
-\paragraph{Epistemic flags.} Table~\ref{tab:inc-epi} repeats the test of Section~\ref{sec:fullvol}. The
-per-event epistemic quantities separate the selected events whose true vertex is outside the fiducial volume
+\paragraph{Epistemic flags.} Table~\ref{tab:inc-epi} asks whether the per-event epistemic quantities of
+Section~\ref{sec:bayes} know that the migrated events are harder. They separate the selected events whose true vertex is outside the fiducial volume
 from those inside with AUC 0.66--0.68 (reconstruction flag, multiplicity, vertex-$z$ spread), and do not separate
 NuWro or GiBUU from GENIE among those events (0.49--0.52): both generators stay inside the training support of
 the all-events model, over the whole dataset.

@@ -15,10 +15,10 @@
    "frac_ood_above_control_p95": 0.14010191384724774
   },
   "flow": {
-   "median_ood": 0.004515873733907938,
-   "median_control": 0.0026958840899169445,
-   "ood_auc": 0.7104859965238688,
-   "frac_ood_above_control_p95": 0.11411980802275286
+   "median_ood": 0.0045099821873009205,
+   "median_control": 0.0027008168399333954,
+   "ood_auc": 0.7103134052754241,
+   "frac_ood_above_control_p95": 0.11337915506310363
   }
  },
  "calibration_heldout": {

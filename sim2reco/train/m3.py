@@ -118,18 +118,14 @@ def _event_prong_summary(theta, kin, piP, pf, pP, sc, ex, offsets):
 
 
 @torch.no_grad()
-def evaluate_tier2(model, tf, ptf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64, seed=0):
+def evaluate_tier2(model, tf, ptf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64, seed=0, samples=None):
+    """samples: a pre-drawn pass over idx_test (sim2reco.train.samples), else the model is sampled here."""
     out = pathlib.Path(out_dir); (out / "figures").mkdir(exist_ok=True); (out / "tables").mkdir(exist_ok=True)
-    torch.manual_seed(seed); rng = np.random.default_rng(seed)
-    S_pr, S_pm, S_v, S_pv, S_x, S_n, S_ex = [], [], [], [], [], [], []
-    for b in ld_test:
-        b = m2.to_dev(b, device); s = model.sample(b, n_steps)
-        S_pr.append(s["prongs"].cpu()); S_pm.append(s["pmask"].cpu()); S_v.append(s["vclass"].cpu()); S_pv.append(s["pv"].cpu())
-        S_x.append(s["x1"].cpu()); S_n.append(s["nprong"].cpu()); S_ex.append(s["exist"].cpu())
-    Npad = max(p.shape[1] for p in S_pr)
-    pad = lambda p: torch.nn.functional.pad(p, (0, 0, 0, Npad - p.shape[1])) if p.dim() == 3 else torch.nn.functional.pad(p, (0, Npad - p.shape[1]))
-    PR = torch.cat([pad(p) for p in S_pr]).numpy(); PM = torch.cat([pad(p) for p in S_pm]).numpy()
-    VC = torch.cat(S_v).numpy(); PV = torch.cat(S_pv).numpy(); X1 = torch.cat(S_x).numpy(); NP = torch.cat(S_n).numpy()
+    rng = np.random.default_rng(seed)
+    if samples is None:
+        from sim2reco.train.samples import sample_split
+        samples = sample_split(model, ld_test, n_steps, device, seed)
+    PR, PM, VC, PV, X1, NP = samples["prongs"], samples["pmask"], samples["vclass"], samples["pv"], samples["x1"], samples["nprong"]
     t0 = d["tier0"][idx_test]; reco = t0[:, 0] > 0; ir = idx_test[reco]
     M = {}
     # ---- vertex class ----

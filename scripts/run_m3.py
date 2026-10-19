@@ -12,6 +12,7 @@ if __name__ == "__main__":
     ap.add_argument("--init", default="reports/m2_1A/model.pt"); ap.add_argument("--eval-only", action="store_true"); ap.add_argument("--steps", type=int, default=64)
     ap.add_argument("--m1", default="reports/m1_1A/metrics.json"); ap.add_argument("--exclude-inttype", type=int, nargs="*", default=None, help="GENIE intType codes held out of train/val (8 = 2p2h)"); ap.add_argument("--only-inttype", type=int, nargs="*", default=None, help="evaluate only test events of these intType codes"); ap.add_argument("--subset", choices=["ccnumu", "nc", "other"], default=None, help="all-events models: evaluate only this subset of the test events")
     ap.add_argument("--ke-cut", type=float, default=10.0, help="hadron KE threshold [MeV] for input tokens"); ap.add_argument("--neutrons", dest="neutrons", action="store_true", default=True, help="admit neutrons as input tokens (default)"); ap.add_argument("--no-neutrons", dest="neutrons", action="store_false"); ap.add_argument("--tier2-only", action="store_true"); ap.add_argument("--max-test", type=int, default=None)
+    ap.add_argument("--cache", default=None, help="write the sampling pass over the evaluated events to this .npz (one draw reused by all evaluations and subsets)"); ap.add_argument("--from-cache", default=None, help="read the sampling pass from this .npz instead of sampling (a full-split cache serves its subsets)")
     ap.add_argument("--vtx-cond-z", nargs="?", const=True, default=False, help="vertex-class head conditioned on the reco z residual (consistent snapping): bare flag = raw residual, 'far' = near/far indicator only"); ap.add_argument("--only-vtx", action="store_true", help="train only the vertex head, warm-started from a finished M3 model (--init)")
     a = ap.parse_args()
     from sim2reco.train import m2, m3
@@ -46,11 +47,13 @@ if __name__ == "__main__":
     idx, ld = restrict(d, idx, ld, tf, ptf)
     m2.write_data_table(stems, d, split, a.out_dir, None if a.eval_only else a.epochs, sum(p.numel() for p in model.parameters()))
     m1 = json.load(open(a.m1)) if pathlib.Path(a.m1).exists() else None
+    from sim2reco.train.samples import get_samples
+    SM = get_samples(model, ld["test"], idx["test"], a.steps, cache=a.cache, from_cache=a.from_cache)  # one draw for both evaluations
     if a.tier2_only:
-        M2 = m3.evaluate_tier2(model, tf, ptf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps)
+        M2 = m3.evaluate_tier2(model, tf, ptf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps, samples=SM)
         print(json.dumps({"closure_prongs": M2["closure_prongs"], "validation": M2["validation"]}, indent=1, default=float)); sys.exit(0)
-    M1 = m2.evaluate(model, tf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps, m1_metrics=m1)
-    M2 = m3.evaluate_tier2(model, tf, ptf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps)
+    M1 = m2.evaluate(model, tf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps, m1_metrics=m1, samples=SM)
+    M2 = m3.evaluate_tier2(model, tf, ptf, d, idx["test"], ld["test"], a.out_dir, n_steps=a.steps, samples=SM)
     print(json.dumps({"tier0": {k: round(v["logloss"], 4) for k, v in M1["tier0"].items()}, "auc_marginal": round(M1["classifier_auc_marginal"], 4), "auc_conditional": round(M1["classifier_auc_conditional"], 4),
                       "vertex": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in M2["vertex_class"].items() if not isinstance(v, list)},
                       "vertex_offset": M2["vertex_offset_to_nearest_plane"], "prong_counts": M2["prong_counts"], "closure_prongs": M2["closure_prongs"],

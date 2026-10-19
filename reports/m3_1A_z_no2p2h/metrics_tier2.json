@@ -1,11 +1,11 @@
 {
  "vertex_class": {
-  "logloss": 1.5153183937072754,
+  "logloss": 3.1619555950164795,
   "logloss_marginal": 1.598512253889629,
-  "accuracy": 0.5768782766675318,
+  "accuracy": 0.5510220607318972,
   "accuracy_marginal": 0.33030054502984685,
   "snapped_frac_real": 0.6696994549701532,
-  "snapped_frac_sampled": 0.6714622372177524,
+  "snapped_frac_sampled": 0.6708123540098625,
   "marginal_real": [
    159081,
    3812,
@@ -18,21 +18,21 @@
    59296
   ],
   "marginal_sampled": [
-   158232,
-   3812,
-   8369,
-   25667,
-   158135,
-   58933,
-   5377,
-   3557,
-   59543
+   158545,
+   3688,
+   8507,
+   26371,
+   157741,
+   59057,
+   5280,
+   3516,
+   58920
   ]
  },
  "vertex_offset_to_nearest_plane": {
   "real_frac_within_0.1mm": 0.6711528678951466,
-  "fake_frac_within_0.1mm": 0.6741552037373475,
-  "w1_mm": 0.0625554872434206
+  "fake_frac_within_0.1mm": 0.6734990916169219,
+  "w1_mm": 0.05638171099147964
  },
  "prong_counts": {
   "n_real": 368992,
@@ -111,7 +111,7 @@
  "closure_prongs": {
   "event_summary_only": 0.5201912929372895,
   "truth_plus_event_summary": 0.5171918570281149,
-  "truth_plus_vertex_z": 0.5420227480108868
+  "truth_plus_vertex_z": 0.5148326035486319
  },
  "lead_proton_P_by_true_KE": [
   {
