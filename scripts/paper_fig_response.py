@@ -9,17 +9,20 @@ import argparse, glob, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import numpy as np, torch
 from torch.utils.data import DataLoader
-from sim2reco.data.compact import load_compact, CompactDataset, collate
+from sim2reco.data.compact import load_compact, CompactDataset, collate, selection_from_config, subset_mask
 from sim2reco.data.dataset import split_by_subrun
 from sim2reco.prep.features import event_features
 from sim2reco.train.m3 import load_model
 from sim2reco.train.m2 import to_dev, _pad
 from sim2reco.eval import plots
-ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--models", nargs="+", required=True); ap.add_argument("--only-inttype", type=int, nargs="*", default=None); ap.add_argument("--n", type=int, default=300000); ap.add_argument("--draws", type=int, default=8); ap.add_argument("--replot", action="store_true", help="re-draw from OUT_PREFIX_cache.pkl"); a = ap.parse_args()
+NAMES = {"A": "full model", "B": "2p2h holdout"}  # legend names of the model labels
+ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--models", nargs="+", required=True); ap.add_argument("--only-inttype", type=int, nargs="*", default=None); ap.add_argument("--subset", default=None, help="all-events models: restrict the test events to this subset (ccnumu, nc, other)"); ap.add_argument("--n", type=int, default=300000); ap.add_argument("--draws", type=int, default=8); ap.add_argument("--replot", action="store_true", help="re-draw from OUT_PREFIX_cache.pkl"); a = ap.parse_args()
 from sim2reco.models.bayes_last import GaussianLastLayer, heads_for, head_layer
-d = load_compact(sorted(p[:-len(".truth.parquet")] for p in glob.glob("data/slim_1A/*.truth.parquet"))); split = split_by_subrun(d["subrun"], seed=0)
+cfg0 = torch.load(a.models[0].split("=")[1] + "/model.pt", map_location="cpu", weights_only=False)["config"]
+d = load_compact(sorted(p[:-len(".truth.parquet")] for p in glob.glob("data/slim_1A/*.truth.parquet")), **selection_from_config(cfg0)); split = split_by_subrun(d["subrun"], seed=0)
 te = np.where(split == 2)[0]
 if a.only_inttype: te = te[np.isin(d["intType"][te], a.only_inttype)]
+if a.subset: te = te[subset_mask(d, a.subset)[te]]
 idx = np.random.default_rng(0).permutation(te)[:a.n]
 cls, mom, mask = _pad(d, idx); X, names = event_features(cls, mom, mask, d["ctx"][idx])
 keh, kep = X[:, names.index("sumKE_had")], X[:, names.index("maxKE_p")]; kpi = np.maximum(X[:, names.index("maxKE_pip")], X[:, names.index("maxKE_pim")]); nch = d["n_charged_true"][idx].astype(int); Pt = np.linalg.norm(d["mu_true"][idx], axis=1) / 1e3
@@ -52,7 +55,7 @@ if not a.replot:
             ex = torch.cat(EX).numpy(); X1 = torch.cat(X1).numpy(); y = tf.inverse(X1[ex], d["mu_true"][idx][ex], d["ctx"][idx][ex])
             pm = PM[ex]; pr = ptf.inverse(PR[ex][pm]); offs = np.concatenate([[0], np.cumsum(pm.sum(1))]); draws.append(summarise(ex, y, pr, offs))
         for k in layers: layers[k].weight.data, layers[k].bias.data = W0[k]
-        S[f"surrogate {lab}" if len(a.models) > 1 else "surrogate"] = draws; print(lab, "sampled", len(draws), "draws", flush=True)
+        S[f"surrogate ({NAMES.get(lab, lab)})" if len(a.models) > 1 else "surrogate"] = draws; print(lab, "sampled", len(draws), "draws", flush=True)
 if not a.replot: pickle.dump({"S": S, "Pt": Pt, "keh": keh, "kep": kep, "kpi": kpi, "nch": nch}, open(a.out + "_cache.pkl", "wb"))
 else: C_ = pickle.load(open(a.out + "_cache.pkl", "rb")); S, Pt, keh, kep, kpi, nch = (C_[k] for k in ("S", "Pt", "keh", "kep", "kpi", "nch"))
 STY = {"open dataset": (plots.PALETTE["real"], "o", "-")}; cyc = [(plots.PALETTE["model"], "s", "--"), (plots.PALETTE["third"], "^", ":")]

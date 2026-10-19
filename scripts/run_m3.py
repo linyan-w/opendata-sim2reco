@@ -13,7 +13,7 @@ if __name__ == "__main__":
     ap.add_argument("--m1", default="reports/m1_1A/metrics.json"); ap.add_argument("--exclude-inttype", type=int, nargs="*", default=None, help="GENIE intType codes held out of train/val (8 = 2p2h)"); ap.add_argument("--only-inttype", type=int, nargs="*", default=None, help="evaluate only test events of these intType codes"); ap.add_argument("--subset", choices=["ccnumu", "nc", "other"], default=None, help="all-events models: evaluate only this subset of the test events")
     ap.add_argument("--ke-cut", type=float, default=10.0, help="hadron KE threshold [MeV] for input tokens"); ap.add_argument("--neutrons", dest="neutrons", action="store_true", default=True, help="admit neutrons as input tokens (default)"); ap.add_argument("--no-neutrons", dest="neutrons", action="store_false"); ap.add_argument("--tier2-only", action="store_true"); ap.add_argument("--max-test", type=int, default=None)
     ap.add_argument("--cache", default=None, help="write the sampling pass over the evaluated events to this .npz (one draw reused by all evaluations and subsets)"); ap.add_argument("--from-cache", default=None, help="read the sampling pass from this .npz instead of sampling (a full-split cache serves its subsets)")
-    ap.add_argument("--vtx-cond-z", nargs="?", const=True, default=False, help="vertex-class head conditioned on the reco z residual (consistent snapping): bare flag = raw residual, 'far' = near/far indicator only"); ap.add_argument("--only-vtx", action="store_true", help="train only the vertex head, warm-started from a finished M3 model (--init)")
+    ap.add_argument("--vtx-cond-z", nargs="?", const=True, default=False, help="vertex-class head conditioned on the reco z residual (consistent snapping): bare flag = raw residual, 'far' = near/far indicator only"); ap.add_argument("--seed", type=int, default=None, help="initialisation and shuffling seed (ensemble members); the split stays at seed 0"); ap.add_argument("--only-vtx", action="store_true", help="train only the vertex head, warm-started from a finished M3 model (--init)")
     a = ap.parse_args()
     from sim2reco.train import m2, m3
     from sim2reco.data.compact import load_compact, selection_from_config
@@ -42,7 +42,7 @@ if __name__ == "__main__":
             idx["test"] = idx["test"][:a.max_test]
             ld["test"] = DataLoader(CompactDataset(d, idx["test"], tf, 0, prong_tf=ptf), batch_size=a.bs, collate_fn=collate, num_workers=4)
     else:
-        d, split, tf, ptf, idx, ld = m3.train(stems, a.out_dir, a.init, a.epochs, a.bs, a.lr, exclude_inttype=a.exclude_inttype, vtx_cond_z=a.vtx_cond_z, only_vtx=a.only_vtx)  # selection inherited from --init
+        d, split, tf, ptf, idx, ld = m3.train(stems, a.out_dir, a.init, a.epochs, a.bs, a.lr, exclude_inttype=a.exclude_inttype, vtx_cond_z=a.vtx_cond_z, only_vtx=a.only_vtx, init_seed=a.seed)  # selection inherited from --init
         model, tf, ptf = m3.load_model(pathlib.Path(a.out_dir) / "model.pt")
     idx, ld = restrict(d, idx, ld, tf, ptf)
     m2.write_data_table(stems, d, split, a.out_dir, None if a.eval_only else a.epochs, sum(p.numel() for p in model.parameters()))

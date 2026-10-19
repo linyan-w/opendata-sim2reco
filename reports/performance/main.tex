@@ -6,11 +6,12 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
 \usepackage{placeins}
-\input{../m3_1A_z/numbers.tex}
-\input{../m3_1A_z/zero_compare_macros.tex}
-\input{../bayes_1A_z/subset_NB_macros.tex}
-\input{../bayes_1A_z/subset_CI_macros.tex}
-\input{../m3_1A_z/closure_ccinc_macros.tex}
+\input{../m3_1A_all_ccnumu/numbers.tex}
+\input{../history/cc_model/history_macros.tex}
+\input{../history/zero_compare_macros.tex}
+\input{../bayes_1A_all_cc/subset_NB_macros.tex}
+\input{../bayes_1A_all_cc/subset_CI_macros.tex}
+\input{../m3_1A_all_ccnumu/closure_ccinc_macros.tex}
 \input{../all_events/macros.tex}
 \input{../inclusive/macros.tex}
 \input{../inclusive_gibuu/macros.tex}
@@ -46,13 +47,16 @@ remaining discrepancies and the parts of the tuple that are derived rather than 
 
 \paragraph{Data.} MINERvA open data~\cite{opendata}, Medium Energy FHC standard MC, playlist 1A. The
 \texttt{Truth} tree holds every generated interaction and the \texttt{MasterAnaDev} tree those with a
-reconstructed muon candidate, together with a copy of the truth. The training population is CC~$\nu_\mu$
-interactions with true vertex $z \ge 4000$\,mm; neutral-current, $\nu_e$ and antineutrino events are out of
-scope for this version. \input{../m3_1A_z/tables/data.tex}
+reconstructed muon candidate, together with a copy of the truth. The training population is every interaction
+with true vertex $z \ge 4000$\,mm: charged and neutral current, the four neutrino flavours, all nuclei of the
+detector (Section~\ref{sec:allevents} gives the composition). Sections~\ref{sec:perf}--\ref{sec:bayes} evaluate
+the model on the CC~$\nu_\mu$ test events, the population most analyses select; Section~\ref{sec:allevents} on
+the other subsets. \input{../m3_1A_all/tables/data.tex}
 
 \paragraph{Inputs.} GENIE final-state particles after intranuclear FSI (\texttt{mc\_FSPart*}), dropping
 neutrinos, GENIE pseudo-particles and nuclear remnants, and hadrons with kinetic energy below 10\,MeV. Neutrons
-are kept. Each particle enters as a species class (12 classes) and its momentum $(p_x, p_y, p_z)$; the context is
+are kept. Each particle enters as a species class (13 classes: 12 hadron and lepton species, the $\mu^+$ its own)
+and its momentum $(p_x, p_y, p_z)$; the context is
 the true vertex $(x,y,z)$ and the struck nucleus $(Z, A)$. Generator-internal labels (interaction mode, $Q^2$,
 $W$, $E_\nu$) are deliberately not used, so that the surrogate depends only on what physically enters the
 detector and can be applied to final states from any generator.
@@ -152,7 +156,7 @@ picture against itself. The generative model is therefore expected to agree dist
 conditional by conditional, which it does (Fig.~\ref{fig:mult-conf}, left and centre), and not event by event.
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/m3_confusion_symmetry.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/m3_confusion_symmetry.png}
 \caption{Why the event-by-event matrix is asymmetric. Left: MasterAnaDev versus one surrogate draw,
 row-normalised. Centre: two independent surrogate draws for the same events, row-normalised, showing the same
 asymmetry. Right: the joint (unnormalised) MasterAnaDev-versus-surrogate matrix, symmetric to \nJointAsym{}.}
@@ -160,20 +164,20 @@ asymmetry. Right: the joint (unnormalised) MasterAnaDev-versus-surrogate matrix,
 \end{figure}
 
 \begin{table}[h]\centering
-\input{../m3_1A_z/tables/tier0.tex}
+\input{../m3_1A_all_ccnumu/tables/tier0.tex}
 \caption{Binary heads: test log loss (lower is better) and AUC for the marginal predictor, the tree baseline on
 summary features, and the surrogate.}
 \label{tab:tier0}
 \end{table}
 
 \begin{table}[h]\centering
-\input{../m3_1A_z/tables/multiplicity.tex}
+\input{../m3_1A_all_ccnumu/tables/multiplicity.tex}
 \caption{Prong multiplicity head ($N \in \{0,\dots,8\}$) among reconstructed events.}
 \label{tab:mult}
 \end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/m3_multiplicity_confusion.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/m3_multiplicity_confusion.png}
 \caption{Prong-multiplicity confusion, row-normalised. Left and centre: reconstructed prongs versus true charged
 hadrons (p, $\pi^\pm$, $K^\pm$ after FSI) for MasterAnaDev and for the surrogate. Right: MasterAnaDev's count
 versus one surrogate draw for the same event.}
@@ -181,14 +185,14 @@ versus one surrogate draw for the same event.}
 \end{figure}
 
 \begin{table}[h]\centering\small
-\input{../m3_1A_z/tables/multiplicity_confusion.tex}
+\input{../m3_1A_all_ccnumu/tables/multiplicity_confusion.tex}
 \caption{Event-by-event confusion between MasterAnaDev's prong count (rows, with the number of test events) and
 one surrogate draw (columns), row-normalised.}
 \label{tab:mult-conf}
 \end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.75\textwidth]{../m3_1A_z/figures/heads_multiplicity_eff.png}
+\includegraphics[width=0.75\textwidth]{../m3_1A_all_ccnumu/figures/heads_multiplicity_eff.png}
 \caption{Left: reconstructed hadron-prong multiplicity, MasterAnaDev versus one surrogate sample per event.
 Right: observed and predicted probability of a reconstructed muon candidate versus the number of true hadrons
 after the input cuts.}
@@ -214,41 +218,41 @@ Figure~\ref{fig:corr} compares the correlation matrices of the nine variables; t
 coefficient is \nCorrDiff{}.
 
 \begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../m3_1A_z/tables/tier1_marginals.tex}}
+\resizebox{\textwidth}{!}{\input{../m3_1A_all_ccnumu/tables/tier1_marginals.tex}}
 \caption{Event-level generated variables on reconstructed test events, in the model's robustly standardised
 space; one surrogate sample per event with the flags, multiplicity and vertex class also sampled.}
 \label{tab:tier1}
 \end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/tier1_muon.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/tier1_muon.png}
 \caption{Muon response in model space: $\log(P_\mathrm{reco}/P_\mathrm{true})$ for MINOS-matched (left) and
 unmatched (centre) muons, and the difference of the projected angle $\theta_x$ (right).}
 \label{fig:muon}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/tier1_vertex.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/tier1_vertex.png}
 \caption{Reconstructed-minus-true vertex residuals in model space (asinh-compressed).}
 \label{fig:vertex}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/tier1_calorimetry.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/tier1_calorimetry.png}
 \caption{Calorimetric branches, $\log(E+1)$. The first three are generated; the spike at zero is the exactly-zero
 population. The last two are derived from \texttt{recoil\_E} at decode time.}
 \label{fig:calo}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.75\textwidth]{../m3_1A_z/figures/tier1_conditionals.png}
+\includegraphics[width=0.75\textwidth]{../m3_1A_all_ccnumu/figures/tier1_conditionals.png}
 \caption{Conditional response: median and 16--84\% band of the muon momentum ratio versus true muon momentum
 (left) and of $\log E_\mathrm{recoil}$ versus true hadronic kinetic energy after cuts (right).}
 \label{fig:cond}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.75\textwidth]{../m3_1A_z/figures/tier1_correlations.png}
+\includegraphics[width=0.75\textwidth]{../m3_1A_all_ccnumu/figures/tier1_correlations.png}
 \caption{Correlation matrices of the nine event-level variables (order as in Table~\ref{tab:tier1}).}
 \label{fig:corr}
 \end{figure}
@@ -294,14 +298,14 @@ pions among prongs with a proton fit gives an AUC of \nPIDaucReal{} in MasterAna
 surrogate (Fig.~\ref{fig:pid}, right), a difference of \nPIDaucGap{}.
 
 \begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../m3_1A_z/tables/pid_species.tex}}
+\resizebox{\textwidth}{!}{\input{../m3_1A_all_ccnumu/tables/pid_species.tex}}
 \caption{Reconstruction outcome by true hadron species on single-hadron, single-prong events: MasterAnaDev /
 surrogate row fractions, and the proton-vs-pion AUC of the proton score among prongs with a proton fit.}
 \label{tab:pid}
 \end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/m3_pid_species.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/m3_pid_species.png}
 \caption{Particle identification versus true species on single-hadron, single-prong events. Left and centre:
 row-normalised outcome matrices for MasterAnaDev and the surrogate. Right: ROC curves of the proton score for
 true protons against true charged pions.}
@@ -309,7 +313,7 @@ true protons against true charged pions.}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/m3_prong_conditionals.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/m3_prong_conditionals.png}
 \caption{Hadron validation against the truth. Left: fraction of events with at least one proton fit versus the
 true leading-proton kinetic energy. Centre: proton-hypothesis momentum of the leading prong versus the same,
 median and 16--84\% band. Right: mean number of reconstructed prongs (all, and with kinematics) versus the true
@@ -318,27 +322,27 @@ number of charged hadrons after FSI.}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/m3_prong_pid.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/m3_prong_pid.png}
 \caption{Left: proton score of prongs with a proton fit, for events whose leading true hadron is a proton or a
 charged pion. Centre: pion-hypothesis momentum. Right: prong angle to the beam.}
 \label{fig:prong-pid}
 \end{figure}
 
 \begin{table}[h]\centering
-\input{../m3_1A_z/tables/prongs.tex}
+\input{../m3_1A_all_ccnumu/tables/prongs.tex}
 \caption{Prong-level marginals: category fractions over all prongs, and median [16\%, 84\%] with $W_1$ for the
 continuous fields of prongs that have the corresponding fit.}
 \label{tab:prongs}
 \end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../m3_1A_z/figures/m3_prongs.png}
+\includegraphics[width=\textwidth]{../m3_1A_all_ccnumu/figures/m3_prongs.png}
 \caption{Prong direction, pion- and proton-hypothesis momenta, and proton score.}
 \label{fig:prongs}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.9\textwidth]{../m3_1A_z/figures/m3_prong_event.png}
+\includegraphics[width=0.9\textwidth]{../m3_1A_all_ccnumu/figures/m3_prong_event.png}
 \caption{Per-event number of prongs with kinematics, with a proton fit, and exiting the detector.}
 \label{fig:prong-event}
 \end{figure}
@@ -369,7 +373,7 @@ the near plane from the flow's smooth core, which puts 13\% too few events on th
 keeps that choice as it was.
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.75\textwidth]{../m3_1A_z/figures/m3_vertex.png}
+\includegraphics[width=0.75\textwidth]{../m3_1A_all_ccnumu/figures/m3_vertex.png}
 \caption{Left: reconstructed vertex $z$ minus the nearest plane position; the spike at zero is the snapped
 population. Right: vertex class marginals (0 unsnapped, 4 nearest plane, 8 farther plane).}
 \label{fig:vtxplane}
@@ -391,14 +395,14 @@ features plus the reconstructed vertex $z$ it is \nAUCvtxz{}, the largest remain
 imperfection of the plane-class head. The design target for these tests was 0.55.
 
 \begin{table}[h]\centering
-\input{../m3_1A_z/tables/closure.tex}
+\input{../m3_1A_all_ccnumu/tables/closure.tex}
 \caption{Closure classifiers on the event-level variables: overall, by block, by single variable, and with the
 truth features added.}
 \label{tab:closure}
 \end{table}
 
 \begin{table}[h]\centering\small
-\input{../m3_1A_z/tables/closure_ccinc.tex}
+\input{../m3_1A_all_ccnumu/tables/closure_ccinc.tex}
 \caption{Closure AUC (0.5 is indistinguishable) with the evaluation's classifier recipe, on the nine generated
 variables and on the non-calorimetry subset that leaves out the non-vertex and isolated-blob energies, for the full
 test split and for the held-out 2p2h events, models A and B. ``+ truth'' adds the truth summary features, the
@@ -408,7 +412,7 @@ resolution of the test is about 0.005 on the full split and 0.01 on the 2p2h sam
 \end{table}
 
 \begin{table}[h]\centering
-\input{../m3_1A_z/tables/tier2_closure.tex}
+\input{../m3_1A_all_ccnumu/tables/tier2_closure.tex}
 \caption{Closure of the prong set and the vertex plane.}
 \label{tab:closure2}
 \end{table}
@@ -438,7 +442,7 @@ shift in composition and a moderate shift in kinematics within covered support, 
 states; it is the realistic case of applying the surrogate to a generator with a different 2p2h model.
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.9\textwidth]{../holdout_2p2h_1A_z/figures/holdout_input_coverage.png}
+\includegraphics[width=0.9\textwidth]{../holdout_2p2h_1A_all/figures/holdout_input_coverage.png}
 \caption{Input coverage of the held-out mode. Left: final-state category after the input cuts for 2p2h and for
 all other modes. Right: leading-proton kinetic energy in two-proton, pion-less final states by interaction mode.}
 \label{fig:hold-cov}
@@ -457,7 +461,7 @@ muon response, the recoil energy versus hadronic energy and the proton momentum 
 on top of each other everywhere.
 
 \begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../holdout_2p2h_1A_z/tables/holdout_summary.tex}}
+\resizebox{\textwidth}{!}{\input{../holdout_2p2h_1A_all/tables/holdout_summary.tex}}
 \caption{Holdout summary. Columns: model A (trained with 2p2h) and model B (2p2h blind) on the 2p2h test
 events; B on the non-2p2h control; A on the full test split. The PID AUC on 2p2h is not meaningful (three
 pion-led events) and is listed only for completeness.}
@@ -465,7 +469,7 @@ pion-led events) and is listed only for completeness.}
 \end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../holdout_2p2h_1A_z/figures/holdout_conditionals.png}
+\includegraphics[width=\textwidth]{../holdout_2p2h_1A_all/figures/holdout_conditionals.png}
 \caption{2p2h test events: muon momentum response versus true momentum, recoil energy versus true hadronic
 kinetic energy, and leading proton-hypothesis momentum versus true leading-proton kinetic energy, for the open
 dataset, model A and the blind model B (median and 16--84\% band).}
@@ -473,14 +477,14 @@ dataset, model A and the blind model B (median and 16--84\% band).}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../holdout_2p2h_1A_z/figures/holdout_efficiency_prongs.png}
+\includegraphics[width=\textwidth]{../holdout_2p2h_1A_all/figures/holdout_efficiency_prongs.png}
 \caption{2p2h test events: reconstruction probability versus true hadron count, mean reconstructed prongs versus
 true charged hadrons, and proton-fit rate versus true leading-proton kinetic energy.}
 \label{fig:hold-eff}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../holdout_2p2h_1A_z/figures/holdout_multiplicity.png}
+\includegraphics[width=\textwidth]{../holdout_2p2h_1A_all/figures/holdout_multiplicity.png}
 \caption{2p2h test events: reconstructed prong multiplicity versus true charged hadrons for the open dataset,
 model A and the blind model B.}
 \label{fig:hold-mult}
@@ -574,14 +578,14 @@ neutrons is adopted for everything reported in this document. Its cost is comput
 3.8, about three times the training time.
 
 \begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../variants_1A/tables/variants_full.tex}}
+\resizebox{\textwidth}{!}{\input{../history/variants_tables/variants_full.tex}}
 \caption{Input-definition variants on the full test split: 50\,MeV without neutrons (ke50), 10\,MeV without
 neutrons (ke10), 10\,MeV with neutron tokens (ke10n).}
 \label{tab:var-full}
 \end{table}
 
 \begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../variants_1A/tables/variants_2p2h.tex}}
+\resizebox{\textwidth}{!}{\input{../history/variants_tables/variants_2p2h.tex}}
 \caption{The same variants on the 2p2h test events.}
 \label{tab:var-2p2h}
 \end{table}
@@ -624,7 +628,7 @@ sampler was made to fill the band uniformly. Model-space comparisons must treat 
 both sides.
 
 \begin{table}[h]\centering\footnotesize
-\input{../m3_1A_z/tables/zero_compare.tex}
+\input{../history/zero_compare.tex}
 \caption{Previous model (exact zeros dequantised) against the present zero-flag model, both at 10\,MeV with
 neutrons. Closure AUC as marginal / truth-conditional; marginal pull RMS over the bins of
 Table~\ref{tab:bayes-bins}, model A, test control / held-out 2p2h, epistemic term only, for all observables and
@@ -794,7 +798,7 @@ where the support actually thins is the question an out-of-support holdout has t
 control above says the last layer reacts to context, not to kinematics.
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../bayes_1A_z/figures/bayes_floor_transfer.png}
+\includegraphics[width=\textwidth]{../bayes_1A_all_cc/figures/bayes_floor_transfer.png}
 \caption{Marginal pulls with the epistemic term only (dotted) and with the model-error floor derived on the
 training-split control added in quadrature (solid), for the test-split control and held-out 2p2h, model A (left)
 and model B (right). Upper row: the non-calorimetry set (recoil, muon momentum ratio and angle, prong count);
@@ -843,7 +847,7 @@ momentum, 0.5\% on the recoil energy and 0.003 on the reconstruction probability
 aleatoric spread of the samples, which is the expected situation inside the training support.
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../bayes_1A_z/figures/bayes_flags_B.png}
+\includegraphics[width=\textwidth]{../bayes_1A_all_cc/figures/bayes_flags_B.png}
 \caption{Per-event epistemic variances of the 2p2h-blind model B on held-out 2p2h events and on in-distribution
 control events. Left: variance of the logit of the reconstruction probability (how unsure the model is that the
 event gets a muon candidate). Centre: variance of the prong-count logits, averaged over the nine classes. Right:
@@ -854,7 +858,7 @@ the green ones.}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../bayes_1A_z/figures/bayes_positive_control_B.png}
+\includegraphics[width=\textwidth]{../bayes_1A_all_cc/figures/bayes_positive_control_B.png}
 \caption{Positive control, i.e.\ does the flag fire when it should: the same three variances for the nominal control
 events and for the same events perturbed out of the training support (hadron momenta $\times 4$, hadron tokens
 $\times 3$, vertex moved to $z = 2500$\,mm, outside the training range, and all three). Only the context shift
@@ -863,14 +867,14 @@ separates.}
 \end{figure}
 
 \begin{table}[h]\centering\small
-\resizebox{\textwidth}{!}{\input{../bayes_1A_z/tables/bins.tex}}
+\resizebox{\textwidth}{!}{\input{../bayes_1A_all_cc/tables/bins.tex}}
 \caption{Bins of the calibration pulls. Logarithmic edges are listed in full; the integer variables use one bin per
 value. ``Populated'' counts the bins with at least 30 events on the control and on the held-out 2p2h sample.}
 \label{tab:bayes-bins}
 \end{table}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../bayes_1A_z/figures/bayes_pulls_AB.png}
+\includegraphics[width=\textwidth]{../bayes_1A_all_cc/figures/bayes_pulls_AB.png}
 \caption{Pull summary for the conditional means: all seven observables binned against truth variables, all
 populated bins, model A (left) and model B (right), on control and on held-out 2p2h events, with a unit normal
 scaled to the control count for reference. The individual observables are in Figs.~\ref{fig:bb-eff}--\ref{fig:bb-dthx}.}
@@ -878,7 +882,7 @@ scaled to the control count for reference. The individual observables are in Fig
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=\textwidth]{../bayes_1A_z/figures/bayes_pulls_marginal_AB.png}
+\includegraphics[width=\textwidth]{../bayes_1A_all_cc/figures/bayes_pulls_marginal_AB.png}
 \caption{Pull summary for the marginal histograms: the six observables binned in themselves, all populated bins,
 same layout as Fig.~\ref{fig:bayes-cal}; pulls beyond $\pm 6$ are placed in the end bins. The individual
 observables are in Figs.~\ref{fig:bm-nprong}--\ref{fig:bm-dthx}.}
@@ -904,79 +908,79 @@ shows the difference with the same bands around zero, where the relative size of
 surrogate-side uncertainty can be read directly. The bins are those of Table~\ref{tab:bayes-bins}.
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_eff_vs_nhad.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_eff_vs_nhad.png}
 \caption{Reconstruction probability versus the true number of hadrons after cuts.}
 \label{fig:bb-eff}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_nprong_vs_nhad.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_nprong_vs_nhad.png}
 \caption{Mean number of reconstructed prongs versus the true number of hadrons after cuts.}
 \label{fig:bb-nprong}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_recoil_vs_ke.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_recoil_vs_ke.png}
 \caption{Mean $\log E_\mathrm{recoil}$ (model space) versus true hadronic kinetic energy.}
 \label{fig:bb-recoil}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_nonvtx100_vs_ke.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_nonvtx100_vs_ke.png}
 \caption{Mean $\log E$ of the non-vertex energy within 100\,mm (model space) versus true hadronic kinetic energy.}
 \label{fig:bb-nv100}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_blobs_vs_ke.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_blobs_vs_ke.png}
 \caption{Mean $\log E$ of isolated blobs (model space) versus true hadronic kinetic energy.}
 \label{fig:bb-blobs}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_muP_vs_P.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_muP_vs_P.png}
 \caption{Mean $\log(P_\mathrm{reco}/P_\mathrm{true})$ of the muon (model space) versus true muon momentum.}
 \label{fig:bb-muP}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_dthx_vs_P.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_dthx_vs_P.png}
 \caption{Mean $\Delta\theta_x$ of the muon (model space) versus true muon momentum.}
 \label{fig:bb-dthx}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_marg_nprong.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_marg_nprong.png}
 \caption{Marginal distribution of the reconstructed prong count (fraction of reconstructed events).}
 \label{fig:bm-nprong}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_marg_recoil.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_marg_recoil.png}
 \caption{Marginal distribution of $\log E_\mathrm{recoil}$ (model space).}
 \label{fig:bm-recoil}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_marg_nonvtx100.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_marg_nonvtx100.png}
 \caption{Marginal distribution of $\log E$ of the non-vertex energy within 100\,mm (model space).}
 \label{fig:bm-nv100}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_marg_blobs.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_marg_blobs.png}
 \caption{Marginal distribution of $\log E$ of isolated blobs (model space).}
 \label{fig:bm-blobs}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_marg_muP.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_marg_muP.png}
 \caption{Marginal distribution of the muon $\log(P_\mathrm{reco}/P_\mathrm{true})$ (model space).}
 \label{fig:bm-muP}
 \end{figure}
 
 \begin{figure}[h]\centering
-\includegraphics[width=0.95\textwidth]{../bayes_1A_z/figures/bayes_binned_marg_dthx.png}
+\includegraphics[width=0.95\textwidth]{../bayes_1A_all_cc/figures/bayes_binned_marg_dthx.png}
 \caption{Marginal distribution of the muon $\Delta\theta_x$ (model space).}
 \label{fig:bm-dthx}
 \end{figure}
@@ -987,12 +991,13 @@ surrogate-side uncertainty can be read directly. The bins are those of Table~\re
 \section{All-events models: CC and NC, all flavours}
 \label{sec:allevents}
 
-Everything above is for the CC $\nu_\mu$ population. This section repeats the main steps with a model trained on
-every interaction in the open dataset's training volume, with the same configuration otherwise (10\,MeV input
-threshold with neutrons, zero flags, length-bucketed batches, two-stage training, Bayesian last layers): model A
-on all events, the 2p2h-blind model B, the 2p2h holdout of Section~\ref{sec:holdout} and the calibration of
-Section~\ref{sec:bayes}. This is the model behind the inclusive generator samples of Section~\ref{sec:inclusive}.
-The CC $\nu_\mu$ models of the earlier sections are unchanged and remain the reference.
+Sections~\ref{sec:perf}--\ref{sec:bayes} evaluate the model on CC $\nu_\mu$ events. This section gives what the
+population adds: the composition of the training volume, what changes in the model for the other flavours and for
+NC, the performance on the NC and the other CC subsets, the 2p2h holdout with the all-events pair (A and the
+2p2h-blind B), and the calibration on the mixed control. Where a comparison is made with ``the CC $\nu_\mu$
+model'', it is the model of the same configuration trained on CC $\nu_\mu$ events only, which preceded the
+all-events model during development and is no longer maintained; its numbers are kept here (\texttt{reports/history})
+to show that adding the other populations to the training costs nothing on the CC $\nu_\mu$ response.
 
 \paragraph{Population.} The training volume holds \nAEnEvents{} interactions (Table~\ref{tab:ae-comp}), of which
 \nAEFracCCnumu{} are CC $\nu_\mu$, \nAEFracNC{} neutral current, \nAEFracCCnumubar{} CC $\bar\nu_\mu$ and

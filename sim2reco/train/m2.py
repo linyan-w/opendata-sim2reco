@@ -52,9 +52,10 @@ def apply_holdout(d, split, exclude_inttype):
 
 def train(stems, out_dir, epochs=20, bs=1024, lr=3e-4, seed=0, device="cuda", d_model=128, n_layers=4,
           flow_hidden=768, flow_layers=5, max_train_events=None, log_every=200, exclude_inttype=None,
-          ke_cut_mev=10.0, keep_neutrons=True, zero_flags=True, bucket=True, population="ccnumu"):
+          ke_cut_mev=10.0, keep_neutrons=True, zero_flags=True, bucket=True, population="ccnumu", init_seed=None):
+    """init_seed: seed of the weight initialisation and the batch shuffling (ensemble members); the split and the transform keep `seed`."""
     out = pathlib.Path(out_dir); out.mkdir(parents=True, exist_ok=True)
-    torch.manual_seed(seed); np.random.seed(seed)
+    init_seed = seed if init_seed is None else init_seed; torch.manual_seed(init_seed); np.random.seed(init_seed)
     t0 = time.time()
     d = load_compact(stems, ke_cut_mev=ke_cut_mev, keep_neutrons=keep_neutrons, population=population)
     split = apply_holdout(d, split_by_subrun(d["subrun"], seed=seed), exclude_inttype)
@@ -64,7 +65,7 @@ def train(stems, out_dir, epochs=20, bs=1024, lr=3e-4, seed=0, device="cuda", d_
         split[drop] = -1
     ok_tr = (split == 0) & d["reco_exists"]
     tf = Tier1Transform().fit(d["tier1"][ok_tr], d["mu_true"][ok_tr], d["ctx"][ok_tr], seed)
-    idx, ds, ld = make_loaders(d, split, tf, bs, seed, bucket=bucket)
+    idx, ds, ld = make_loaders(d, split, tf, bs, init_seed, bucket=bucket)
     print(f"data: {len(d['subrun'])} events ({(split==0).sum()} train / {(split==1).sum()} val / {(split==2).sum()} test), "
           f"{d['offsets'][-1]} particles, {time.time()-t0:.0f} s", flush=True)
 

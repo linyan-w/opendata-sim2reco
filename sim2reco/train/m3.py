@@ -44,18 +44,18 @@ def fit_transforms(d, split, seed):
 
 
 def train(stems, out_dir, init_from="reports/m2/model.pt", epochs=12, bs=1024, lr=2e-4, seed=0, device="cuda",
-          prong_layers=3, log_every=500, exclude_inttype=None, ke_cut_mev=None, keep_neutrons=None, vtx_cond_z=False, only_vtx=False):  # selection inherited from the M2 model
+          prong_layers=3, log_every=500, exclude_inttype=None, ke_cut_mev=None, keep_neutrons=None, vtx_cond_z=False, only_vtx=False, init_seed=None):  # selection inherited from the M2 model
     """vtx_cond_z: vertex-class head conditioned on the reco z residual (see Surrogate); only_vtx: train the vertex head alone, everything else
     frozen (warm start from a finished M3 model), for the head-only stage that makes the snapping class consistent with the flow's z."""
     out = pathlib.Path(out_dir); out.mkdir(parents=True, exist_ok=True)
-    torch.manual_seed(seed); np.random.seed(seed); t0 = time.time()
+    init_seed = seed if init_seed is None else init_seed; torch.manual_seed(init_seed); np.random.seed(init_seed); t0 = time.time()  # weights and shuffling; split and transform keep `seed`
     ck0 = torch.load(init_from, map_location="cpu", weights_only=False)["config"]
     ke_cut_mev = ck0.get("ke_cut_mev", 50.0) if ke_cut_mev is None else ke_cut_mev  # old checkpoints predate the key   # inherit the M2 model's selection
     keep_neutrons = ck0.get("keep_neutrons", False) if keep_neutrons is None else keep_neutrons
     population = ck0.get("population", "ccnumu")
     d = load_compact(stems, ke_cut_mev=ke_cut_mev, keep_neutrons=keep_neutrons, population=population); split = m2.apply_holdout(d, split_by_subrun(d["subrun"], seed=seed), exclude_inttype)
     tf, ptf = fit_transforms(d, split, seed)
-    idx, ds, ld = make_loaders(d, split, tf, ptf, bs, seed)
+    idx, ds, ld = make_loaders(d, split, tf, ptf, bs, init_seed)
     print(f"data: {len(split)} events, {d['p_offsets'][-1]} prongs, {len(tf.planes.z)} vertex planes, {time.time()-t0:.0f} s", flush=True)
     ck = torch.load(init_from, map_location=device, weights_only=False); c = ck["config"]
     model = Surrogate(c["d_model"], 4, c["n_layers"], c["flow_hidden"], c["flow_layers"], tier2=True, prong_layers=prong_layers, zero_flags=c.get("zero_flags", False), n_classes=c.get("n_classes", 13), vtx_cond_z=vtx_cond_z).to(device)

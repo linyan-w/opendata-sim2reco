@@ -9,11 +9,11 @@ import numpy as np
 from sim2reco.data.dataset import split_by_subrun
 
 ap = argparse.ArgumentParser(); ap.add_argument("--out", default="reports/all_events"); ap.add_argument("--cache", default="data/cache_v2_ke10n_all")
-ap.add_argument("--cc-model", default="reports/m3_1A_z"); ap.add_argument("--all-model", default="reports/m3_1A_all")
-ap.add_argument("--holdout-cc", default="reports/holdout_2p2h_1A_z"); ap.add_argument("--holdout-all", default="reports/holdout_2p2h_1A_all")
-ap.add_argument("--cal-cc", default="reports/bayes_1A_z/bayes_uncertainty_A.json"); ap.add_argument("--cal-all", default="reports/bayes_1A_all/bayes_uncertainty_A_ccctl.json"); ap.add_argument("--cal-all-mixed", default="reports/bayes_1A_all/bayes_uncertainty_A.json")
-ap.add_argument("--closure-all", default="reports/all_events/closure.json"); ap.add_argument("--closure-cc", default="reports/m3_1A_z/closure_ccinc.json")
-ap.add_argument("--nuwro-cc", default="reports/nuwro_compare/summary.json"); ap.add_argument("--nuwro-all", default="reports/nuwro_compare_all/summary.json")
+ap.add_argument("--cc-model", default="reports/history/cc_model/m3_1A_z"); ap.add_argument("--all-model", default="reports/m3_1A_all")
+ap.add_argument("--holdout-cc", default="reports/history/cc_model/holdout_2p2h_1A_z"); ap.add_argument("--holdout-all", default="reports/holdout_2p2h_1A_all")
+ap.add_argument("--cal-cc", default="reports/history/cc_model/bayes_1A_z/bayes_uncertainty_A.json"); ap.add_argument("--cal-all", default="reports/bayes_1A_all/bayes_uncertainty_A_ccctl.json"); ap.add_argument("--cal-all-mixed", default="reports/bayes_1A_all/bayes_uncertainty_A.json")
+ap.add_argument("--closure-all", default="reports/all_events/closure.json"); ap.add_argument("--closure-cc", default="reports/history/cc_model/m3_1A_z/closure_ccinc.json")
+ap.add_argument("--nuwro-cc", default="reports/history/cc_model/nuwro_compare/summary.json"); ap.add_argument("--nuwro-all", default="reports/history/cc_model/nuwro_compare_all/summary.json")
 a = ap.parse_args(); out = pathlib.Path(a.out); (out / "tables").mkdir(parents=True, exist_ok=True)
 J = lambda p: json.load(open(p))
 mac = {}

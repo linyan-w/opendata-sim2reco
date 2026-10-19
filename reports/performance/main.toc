@@ -4,8 +4,8 @@
 \contentsline {paragraph}{Splits and metrics.}{6}{section*.6}%
 \contentsline {section}{\numberline {2}Model}{6}{section.2}%
 \contentsline {paragraph}{Training.}{7}{section*.7}%
-\contentsline {section}{\numberline {3}Performance}{7}{section.3}%
-\contentsline {subsection}{\numberline {3.1}Event classification heads}{7}{subsection.3.1}%
+\contentsline {section}{\numberline {3}Performance}{8}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Event classification heads}{8}{subsection.3.1}%
 \contentsline {subsection}{\numberline {3.2}Muon, vertex and calorimetry}{11}{subsection.3.2}%
 \contentsline {subsection}{\numberline {3.3}Hadron prongs}{14}{subsection.3.3}%
 \contentsline {subsection}{\numberline {3.4}Vertex plane}{17}{subsection.3.4}%
@@ -40,6 +40,6 @@
 \contentsline {paragraph}{Selected events and where they come from.}{44}{section*.28}%
 \contentsline {paragraph}{Vertex-$z$ tails and the migration into the fiducial volume.}{45}{section*.29}%
 \contentsline {paragraph}{Epistemic flags.}{45}{section*.30}%
-\contentsline {paragraph}{The dead-time cut variable.}{45}{section*.31}%
+\contentsline {paragraph}{The dead-time cut variable.}{46}{section*.31}%
 \contentsline {section}{\numberline {10}Known limitations}{47}{section.10}%
 \contentsline {section}{\numberline {A}Data conventions that had to be handled}{48}{appendix.A}%

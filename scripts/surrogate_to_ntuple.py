@@ -46,6 +46,7 @@ def main():
     ap.add_argument("--n", type=int, default=None); ap.add_argument("--steps", type=int, default=64); ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--deadtime", default=DEADTIME_TABLE if pathlib.Path(DEADTIME_TABLE).exists() else None, help="empirical table of the dead-time cut variable (scripts/deadtime_study.py); drawn per event by reconstructed vertex z, independently of the event; '' to skip")
     ap.add_argument("--epi-draws", type=int, default=16, help="posterior weight draws for per-event epistemic uncertainties (0 = off); needs bayes_last.pt in MODEL_DIR")
+    ap.add_argument("--ensemble", nargs="*", default=[], help="further members of an ensemble (model directories trained with other seeds, scripts/pipeline_ensemble.sh): the nominal sample draws each batch from a random member, and the epistemic columns are the spread between the members' common-noise draws instead of posterior draws")
     a = ap.parse_args()
     torch.manual_seed(a.seed)
     truth = ak.from_parquet(a.truth)
@@ -60,23 +61,38 @@ def main():
         model, tf = m2.load_model(pathlib.Path(a.model_dir) / "model.pt"); ptf = None
     ds = CompactDataset(d, np.arange(len(truth)), tf, a.seed, prong_tf=ptf)  # ptf=None -> Tier 1 only
     loader = lambda: DataLoader(ds, batch_size=2048, collate_fn=collate, num_workers=4)
+    members = [model]
+    for md in a.ensemble:  # ensemble members share the split and the transforms (same data, same transform seed); checked on the scalings
+        m_, tf_, _ = m3.load_model(pathlib.Path(md) / "model.pt"); assert np.allclose(tf_.loc, tf.loc) and np.allclose(tf_.scale, tf.scale), f"{md}: transform differs from {a.model_dir}"; members.append(m_)
+    if a.ensemble: print(f"ensemble of {len(members)} members: nominal sample per batch from a random member, epistemic columns from the spread between members", flush=True)
+    MEMBER = []
 
-    def generate(seed, prongs=True):
+    def generate(seed, prongs=True, model=model, mixture=False):
         """One full generation pass; a fixed seed gives the same base noise, so repeated passes differ only through the weights.
-        prongs=False skips the prong-set flow (the epistemic draws use only event-level outputs and the vertex class)."""
-        torch.manual_seed(seed); S, PR, PM, VC, P0 = [], [], [], [], []
+        prongs=False skips the prong-set flow (the epistemic draws use only event-level outputs and the vertex class).
+        mixture: each batch is drawn from a random ensemble member (recorded in MEMBER)."""
+        torch.manual_seed(seed); S, PR, PM, VC, P0, PN = [], [], [], [], [], []; rng = np.random.default_rng(seed + 77)
         for b in loader():
-            s = model.sample(to_dev(b, "cuda"), a.steps, prongs=prongs)
+            m_ = members[rng.integers(len(members))] if mixture else model
+            if mixture: MEMBER.append(np.full(len(b["ctx"]), members.index(m_), np.int32))
+            s = m_.sample(to_dev(b, "cuda"), a.steps, prongs=prongs)
             S.append(torch.cat([s["exist"][:, None].float(), s["minos"][:, None].float(), s["charge"][:, None].float(), s["nprong"][:, None].float(), s["x1"]], 1).cpu())
-            P0.append(s["p0"].cpu())
+            P0.append(s["p0"].cpu()); PN.append(s["pn"].cpu())
             if tier2: PR.append(s["prongs"].cpu()); PM.append(s["pmask"].cpu()); VC.append(s["vclass"].cpu())
-        return torch.cat(S).numpy(), PR, PM, VC, torch.cat(P0).numpy()
+        return torch.cat(S).numpy(), PR, PM, VC, torch.cat(P0).numpy(), torch.cat(PN).numpy()
 
-    S, PR, PM, VC, P0 = generate(a.seed)
+    S, PR, PM, VC, P0, _ = generate(a.seed, mixture=bool(a.ensemble))
     # ---- epistemic uncertainties: analytic per-variable variance (model space) + K common-noise posterior draws (physical units)
     epi = None
     bl_path = pathlib.Path(a.model_dir) / "bayes_last.pt"
-    if a.epi_draws > 0 and bl_path.exists():
+    if a.ensemble:
+        # one common-noise draw per member (event-level outputs only); the analytic flags become the between-member variances
+        # of the flag logits, of the multiplicity log-probabilities and of the model-space event vector
+        draws = [generate(a.seed, prongs=False, model=m_) for m_ in members]
+        lg = np.stack([np.log(np.clip(dr[4], 1e-6, 1 - 1e-6) / np.clip(1 - dr[4], 1e-6, None)) for dr in draws]); ln = np.stack([np.log(np.clip(dr[5], 1e-9, None)) for dr in draws]); xs = np.stack([dr[0][:, 4:] for dr in draws])
+        epi = {"logit_var": lg.var(0, ddof=1), "card_var": ln.var(0, ddof=1).mean(1), "flow_var": xs.var(0, ddof=1), "draws": [dr[:5] for dr in draws]}
+        a.epi_draws = len(members); print(f"epistemic uncertainties from the {len(members)} ensemble members (common noise)", flush=True)
+    elif a.epi_draws > 0 and bl_path.exists():
         from sim2reco.models.bayes_last import FeatureTap, GaussianLastLayer, HEADS, head_layer, heads_for
         post = {k: GaussianLastLayer.from_state(v, "cuda") for k, v in torch.load(bl_path, map_location="cpu", weights_only=False).items()}
         layers = {k: head_layer(model, p) for k, (p, _) in heads_for(model).items()}; taps = {k: FeatureTap(l) for k, l in layers.items()}
@@ -99,7 +115,7 @@ def main():
         for k_ in range(a.epi_draws):
             for k in ("tier0", "card", "flow") + (("prong",) if tier2 else ()) + (("zero",) if model.zero_flags else ()):
                 dW, db = post[k].sample_delta(gen); layers[k].weight.data = W0[k][0] + dW; layers[k].bias.data = W0[k][1] + db
-            draws.append(generate(a.seed, prongs=False))
+            draws.append(generate(a.seed, prongs=False)[:5])
         for k in layers: layers[k].weight.data, layers[k].bias.data = W0[k]
         epi["draws"] = draws
         print(f"epistemic uncertainties from {a.epi_draws} posterior draws (common noise)", flush=True)
@@ -136,6 +152,7 @@ def main():
         out.update(decode_prongs(rec, choose_primary="flag"))
         out["MasterAnaDev_hadron_number"] = n; out["n_prongs"] = n + 1
     out["surrogate_p_reco_exists"] = P0[exist, 0].astype(np.float64)
+    if a.ensemble: out["surrogate_member"] = np.concatenate(MEMBER)[exist]
     if epi is not None:
         # analytic (model space): std of the flag logits, mean multiplicity-logit variance, event-flow flag (sum of 9 variances)
         out["surrogate_epi_logit_reco_exists"] = np.sqrt(epi["logit_var"][exist, 0]); out["surrogate_epi_logit_minos"] = np.sqrt(epi["logit_var"][exist, 1]); out["surrogate_epi_logit_charge"] = np.sqrt(epi["logit_var"][exist, 2])
