@@ -36,7 +36,7 @@ with torch.no_grad():
         if model.zero_flags and fl.any():
             pz = torch.sigmoid(model.zero(z[fl])); post["zero"].accumulate(taps["zero"].h, None, (pz * (1 - pz)).mean(1))
         if fl.any():
-            pv = torch.softmax(model.vtx_logits(cond, b["vphase"][fl]), -1); post["vtx"].accumulate(taps["vtx"].h, None, (pv * (1 - pv)).sum(1))
+            pv = torch.softmax(model.vtx_logits(cond, b["vphase"][fl], b["x1"][fl][:, 5:6]), -1); post["vtx"].accumulate(taps["vtx"].h, None, (pv * (1 - pv)).sum(1))
             # flows: regression of the FM target on the last-layer features, several (t, noise) draws per event
             x1 = b["x1"][fl]; pos = (flags[:, 2:4].sum(1) == 0) if model.zero_flags else torch.ones(len(x1), dtype=torch.bool, device=dev)  # events with both energies positive: all flow outputs are trained
             for _ in range(a.draws):

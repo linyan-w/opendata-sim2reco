@@ -1,45 +1,50 @@
-\contentsline {section}{\numberline {1}Setup}{6}{section.1}%
-\contentsline {paragraph}{Data.}{6}{section*.4}%
-\contentsline {paragraph}{Inputs.}{6}{section*.5}%
-\contentsline {paragraph}{Splits and metrics.}{6}{section*.6}%
-\contentsline {section}{\numberline {2}Model}{6}{section.2}%
-\contentsline {paragraph}{Training.}{7}{section*.7}%
-\contentsline {section}{\numberline {3}Performance}{8}{section.3}%
-\contentsline {subsection}{\numberline {3.1}Event classification heads}{8}{subsection.3.1}%
-\contentsline {subsection}{\numberline {3.2}Muon, vertex and calorimetry}{11}{subsection.3.2}%
-\contentsline {subsection}{\numberline {3.3}Hadron prongs}{14}{subsection.3.3}%
-\contentsline {subsection}{\numberline {3.4}Vertex plane}{17}{subsection.3.4}%
-\contentsline {subsection}{\numberline {3.5}Closure tests}{17}{subsection.3.5}%
-\contentsline {section}{\numberline {4}Holdout test: a 2p2h-blind surrogate}{20}{section.4}%
-\contentsline {paragraph}{Where 2p2h sits in input space.}{20}{section*.8}%
-\contentsline {paragraph}{Result.}{20}{section*.9}%
-\contentsline {paragraph}{What the residual was, and how it was removed.}{21}{section*.10}%
-\contentsline {paragraph}{How large is the loss of fidelity, and is it resolved?}{22}{section*.11}%
-\contentsline {paragraph}{Scope of the conclusion.}{23}{section*.12}%
-\contentsline {paragraph}{Is 2p2h reachable by reweighting?}{23}{section*.13}%
-\contentsline {section}{\numberline {5}Input definition: threshold and neutrons}{23}{section.5}%
-\contentsline {section}{\numberline {6}Zero flags for the calorimetric spikes}{24}{section.6}%
-\contentsline {section}{\numberline {7}Epistemic uncertainty from Bayesian last layers}{26}{section.7}%
-\contentsline {paragraph}{Does the flag detect the held-out mode?}{26}{section*.14}%
-\contentsline {paragraph}{Can the flag detect anything?}{26}{section*.15}%
-\contentsline {paragraph}{Is the uncertainty calibrated?}{26}{section*.16}%
-\contentsline {paragraph}{Misfit, not shift.}{28}{section*.17}%
-\contentsline {paragraph}{A model-error floor.}{28}{section*.18}%
-\contentsline {paragraph}{The non-calorimetry observable set.}{28}{section*.19}%
-\contentsline {paragraph}{Uncertainties in the output file.}{29}{section*.20}%
-\contentsline {subsection}{\numberline {7.1}Binned comparisons behind the pulls}{30}{subsection.7.1}%
-\contentsline {section}{\numberline {8}All-events models: CC and NC, all flavours}{40}{section.8}%
-\contentsline {paragraph}{Population.}{40}{section*.21}%
-\contentsline {paragraph}{What changes in the model.}{40}{section*.22}%
-\contentsline {paragraph}{Performance by subset.}{40}{section*.23}%
-\contentsline {paragraph}{2p2h holdout.}{42}{section*.24}%
-\contentsline {paragraph}{Calibration.}{42}{section*.25}%
-\contentsline {section}{\numberline {9}Full dataset, full volume: inclusive NuWro and GiBUU samples}{43}{section.9}%
-\contentsline {paragraph}{Construction.}{43}{section*.26}%
-\contentsline {paragraph}{Generators.}{44}{section*.27}%
-\contentsline {paragraph}{Selected events and where they come from.}{44}{section*.28}%
-\contentsline {paragraph}{Vertex-$z$ tails and the migration into the fiducial volume.}{45}{section*.29}%
-\contentsline {paragraph}{Epistemic flags.}{45}{section*.30}%
-\contentsline {paragraph}{The dead-time cut variable.}{46}{section*.31}%
-\contentsline {section}{\numberline {10}Known limitations}{47}{section.10}%
-\contentsline {section}{\numberline {A}Data conventions that had to be handled}{48}{appendix.A}%
+\contentsline {section}{\numberline {1}Setup}{7}{section.1}%
+\contentsline {paragraph}{Data.}{7}{section*.4}%
+\contentsline {paragraph}{Inputs.}{7}{section*.5}%
+\contentsline {paragraph}{Splits and metrics.}{7}{section*.6}%
+\contentsline {section}{\numberline {2}Model}{7}{section.2}%
+\contentsline {paragraph}{Training.}{8}{section*.7}%
+\contentsline {section}{\numberline {3}Performance}{9}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Event classification heads}{9}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Muon, vertex and calorimetry}{12}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Hadron prongs}{15}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Vertex plane}{18}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Closure tests}{18}{subsection.3.5}%
+\contentsline {section}{\numberline {4}Holdout test: a 2p2h-blind surrogate}{21}{section.4}%
+\contentsline {paragraph}{Where 2p2h sits in input space.}{21}{section*.8}%
+\contentsline {paragraph}{Result.}{21}{section*.9}%
+\contentsline {paragraph}{What the residual was, and how it was removed.}{22}{section*.10}%
+\contentsline {paragraph}{How large is the loss of fidelity, and is it resolved?}{23}{section*.11}%
+\contentsline {paragraph}{Scope of the conclusion.}{24}{section*.12}%
+\contentsline {paragraph}{Is 2p2h reachable by reweighting?}{24}{section*.13}%
+\contentsline {section}{\numberline {5}Input definition: threshold and neutrons}{24}{section.5}%
+\contentsline {section}{\numberline {6}Zero flags for the calorimetric spikes}{25}{section.6}%
+\contentsline {section}{\numberline {7}Epistemic uncertainty from Bayesian last layers}{27}{section.7}%
+\contentsline {paragraph}{Does the flag detect the held-out mode?}{27}{section*.14}%
+\contentsline {paragraph}{Can the flag detect anything?}{27}{section*.15}%
+\contentsline {paragraph}{Is the uncertainty calibrated?}{27}{section*.16}%
+\contentsline {paragraph}{Misfit, not shift.}{29}{section*.17}%
+\contentsline {paragraph}{A model-error floor.}{29}{section*.18}%
+\contentsline {paragraph}{The non-calorimetry observable set.}{29}{section*.19}%
+\contentsline {paragraph}{Uncertainties in the output file.}{30}{section*.20}%
+\contentsline {paragraph}{What the pull denominator is made of.}{31}{section*.21}%
+\contentsline {subsection}{\numberline {7.1}Binned comparisons behind the pulls}{32}{subsection.7.1}%
+\contentsline {section}{\numberline {8}All-events models: CC and NC, all flavours}{41}{section.8}%
+\contentsline {paragraph}{Population.}{41}{section*.22}%
+\contentsline {paragraph}{What changes in the model.}{41}{section*.23}%
+\contentsline {paragraph}{Performance by subset.}{41}{section*.24}%
+\contentsline {paragraph}{2p2h holdout.}{43}{section*.25}%
+\contentsline {paragraph}{Calibration.}{43}{section*.26}%
+\contentsline {section}{\numberline {9}Full dataset, full volume: inclusive NuWro and GiBUU samples}{44}{section.9}%
+\contentsline {paragraph}{Construction.}{44}{section*.27}%
+\contentsline {paragraph}{Generators.}{45}{section*.28}%
+\contentsline {paragraph}{Selected events and where they come from.}{45}{section*.29}%
+\contentsline {paragraph}{Vertex-$z$ tails and the migration into the fiducial volume.}{46}{section*.30}%
+\contentsline {paragraph}{Epistemic flags.}{46}{section*.31}%
+\contentsline {paragraph}{The dead-time cut variable.}{47}{section*.32}%
+\contentsline {section}{\numberline {10}Ensemble of the deployed model}{48}{section.10}%
+\contentsline {paragraph}{Does the spread cover the residual?}{49}{section*.33}%
+\contentsline {paragraph}{Does the spread grow where the data are sparse?}{49}{section*.34}%
+\contentsline {paragraph}{What to use.}{49}{section*.35}%
+\contentsline {section}{\numberline {11}Known limitations}{52}{section.11}%
+\contentsline {section}{\numberline {A}Data conventions that had to be handled}{52}{appendix.A}%

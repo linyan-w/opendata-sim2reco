@@ -17,6 +17,7 @@
 \input{../inclusive_gibuu/macros.tex}
 \input{../inclusive/macros_inc.tex}
 \input{../deadtime/macros.tex}
+\input{../ensemble/macros.tex}
 
 \title{A generative surrogate of MINERvA reconstruction\\ trained on the open-data Monte Carlo: performance report}
 \author{L.~Wan\thanks{lwan@fnal.gov}}
@@ -889,6 +890,17 @@ observables are in Figs.~\ref{fig:bm-nprong}--\ref{fig:bm-dthx}.}
 \label{fig:bayes-cal-marg}
 \end{figure}
 
+\paragraph{What the pull denominator is made of.} On the binned marginals of the control sample the three terms of the
+pull denominator are, as medians over bins, 89\% of the variance from the open dataset's statistical error (300\,k
+events), 11\% from the surrogate's own sampling noise (eight draws) and about zero from the epistemic term: the
+latter is the across-draw variance of a bin fraction minus the sampling variance expected for the draws, and it
+clips to zero in nearly every bin, because the last-layer posterior fitted on 12.6\,M events moves a marginal by far
+less than the sampling noise of a 300\,k-event comparison. Dropping the epistemic term changes the marginal pull
+RMS from 1.40 to 1.46. The pulls therefore measure the surrogate's residual against the statistical resolution of
+the test (a 2--3\% residual per bin), not the size of the epistemic band; the epistemic quantities earn their keep
+per event, as flags (Table~\ref{tab:inc-epi}), and Section~\ref{sec:ensemble} replaces the posterior by an ensemble
+for an uncertainty that responds to sparse regions.
+
 \subsection{Binned comparisons behind the pulls}
 \label{sec:bayes-binned}
 
@@ -1266,6 +1278,100 @@ the standard cut ($\le 1$) in bins of reconstructed and true quantities and of t
 overall pass rate.}
 \label{fig:deadtime}
 \end{figure}
+\FloatBarrier
+
+\section{Ensemble of the deployed model}
+\label{sec:ensemble}
+
+The epistemic term of Section~\ref{sec:bayes} is the posterior of a linear last layer and is negligible on any
+binned prediction; it cannot grow where the network itself is extrapolating. The usual remedy is an ensemble:
+\nEnsMembers{} models of the same configuration trained with different initialisation and shuffling seeds (the same
+split and transforms), whose disagreement on an event measures how much the training data constrain the response
+there. The members were trained like the deployed model (M2, M3, the $z$-conditioned vertex head, Bayesian last
+layers; \texttt{scripts/pipeline\_ensemble.sh}) and are statistically indistinguishable from it on every closure
+metric (Table~\ref{tab:ens-members}). In the ensemble output (\texttt{surrogate\_to\_ntuple.py --ensemble}) the
+nominal sample draws each batch from a random member, so the file is the ensemble mixture
+(\texttt{surrogate\_member} records the member), and the \texttt{surrogate\_epi\_*} columns are the spread between
+the members' common-noise draws instead of the posterior draws, under the same branch names.
+
+\begin{table}[h]\centering\footnotesize
+\resizebox{\textwidth}{!}{\input{../ensemble/tables/members.tex}}
+\caption{The ensemble members: final validation losses of the reconstruction flag and the event flow, closure AUCs
+(marginal and with the truth features) and $W_1$ of two model-space marginals on the full test split.}
+\label{tab:ens-members}
+\end{table}
+
+\paragraph{Does the spread cover the residual?} Table~\ref{tab:ens-spread} compares, on \nEnsTestN{} CC $\nu_\mu$
+test events sampled by every member with common noise, the between-member spread of a bin fraction with the
+ensemble mean's residual against the open dataset, for the calibration's marginals and for the reconstruction and
+selection probabilities of the MINERvA~101 selection in the bins of the measurement. The spread is real but a
+factor two to three smaller than the residual: on the marginals it is 0.4--1.2\% of a bin against residuals of
+1.2--1.7\%, it exceeds the residual in \nEnsCovermargmuP{} (muon momentum) to 13\% (vertex $z$) of the bins, and
+adding it to the pull denominator moves the pull RMS from \nEnsPullmargmuP{} (muon momentum), \nEnsPullmargtheta{}
+(angle) and \nEnsPullmargrecoil{} (recoil); on the selected events by reconstructed $p_T$ from
+\nEnsPullselrecbypT{}. The residual is a systematic that the members share: same architecture, same data, same
+biases. With four members the spread itself is known to about 40\%; more members would sharpen the estimate, not
+change the conclusion.
+
+\begin{table}[h]\centering\footnotesize
+\resizebox{\textwidth}{!}{\input{../ensemble/tables/spread.tex}}
+\caption{Between-member spread against the residual, on \nEnsTestN{} CC $\nu_\mu$ test events: median relative
+residual of the ensemble mean, median relative spread, the spread over the open dataset's statistical error, the
+fraction of bins where the spread exceeds the residual, and the pull RMS with the statistical and sampling errors
+only and with the spread added in quadrature.}
+\label{tab:ens-spread}
+\end{table}
+
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{../ensemble/figures/ensemble_spread.png}
+\caption{Residual of the ensemble mean relative to the open dataset (points, statistical error) and the
+between-member spread (band) per bin, for three marginals and for the selection in bins of the true and
+reconstructed muon momentum.}
+\label{fig:ens-spread}
+\end{figure}
+
+\paragraph{Does the spread grow where the data are sparse?} It does, by an order of magnitude, and that is what the
+posterior never showed. Per event, the members agree on the muon momentum to \nEnsPerEvPbulk{} for muons below
+$5^\circ$ and disagree by \nEnsPerEvPwide{} above $45^\circ$, with the vertex $z$ spread rising from zero to
+\nEnsPerEvZwide{}\,mm (Table~\ref{tab:ens-perev-test}); at $p_T$ above 2.5\,GeV the momentum spread is
+\nEnsPerEvPhighpT{}. On the inclusive GENIE sample (Table~\ref{tab:ens-perev-inc}) the written per-event
+uncertainty of the muon momentum is \nEnsIncPinside{} for selected events with the true vertex inside the fiducial
+volume and \nEnsIncPoutside{} for those that migrated in from outside, against \nEnsIncPostPinside{} and
+\nEnsIncPostPoutside{} from the posterior draws; the vertex-$z$ uncertainty is \nEnsIncZinside{} against
+\nEnsIncZoutside{}\,mm. As per-event flags the ensemble quantities separate the migrated events from the others
+better than the posterior ones (Table~\ref{tab:ens-auc}: event flow \nEnsAUCflowPost{} $\to$ \nEnsAUCflowEns{},
+vertex-$z$ spread \nEnsAUCvzPost{} $\to$ \nEnsAUCvzEns{}), and still do not separate GiBUU or NuWro from GENIE.
+
+\begin{table}[h]\centering\footnotesize
+\input{../ensemble/tables/per_event_test.tex}
+\caption{Per-event between-member spread (median over events reconstructed by every member) of the muon momentum
+and the recoil energy, relative, and of the vertex $z$, in bins of the true muon $p_T$ and angle; CC $\nu_\mu$ test
+events.}
+\label{tab:ens-perev-test}
+\end{table}
+
+\begin{table}[h]\centering\footnotesize
+\resizebox{\textwidth}{!}{\input{../ensemble/tables/per_event_inclusive.tex}}
+\caption{Per-event uncertainties written to the inclusive GENIE file (medians): the posterior-draw columns of the
+single model against the between-member columns of the ensemble, for reconstructed-fiducial events by origin,
+muon angle and $p_T$.}
+\label{tab:ens-perev-inc}
+\end{table}
+
+\begin{table}[h]\centering\footnotesize
+\input{../ensemble/tables/epi_auc.tex}
+\caption{AUC of the per-event epistemic quantities as flags, posterior draws against the ensemble: true vertex
+outside against inside the fiducial volume among reconstructed-fiducial GENIE events, and GiBUU against GENIE among
+the events from outside.}
+\label{tab:ens-auc}
+\end{table}
+
+\paragraph{What to use.} The ensemble spread says where the model is uncertain and the model-error floor of
+Section~\ref{sec:bayes} says how large the residual is where it is not: the honest per-bin uncertainty is the
+spread added in quadrature to the floor, and neither alone. The ensemble files of the three inclusive samples
+(\texttt{surrogate\_Eall\_*}) reproduce the single-model comparisons of Section~\ref{sec:inclusive} (the GENIE
+closure gives \nIncGBGenOutFrac{} of selected events from outside the fiducial volume against
+\nIncGBRefOutFrac{} with either) and carry the ensemble columns.
 \FloatBarrier
 
 \section{Known limitations}

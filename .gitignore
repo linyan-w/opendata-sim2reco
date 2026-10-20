@@ -27,3 +27,5 @@ reports/pipeline_1A/*.log
 !reports/m2_1A_all_no2p2h/model.pt
 !reports/m3_1A_all/model.pt
 !reports/m3_1A_all_no2p2h/model.pt
+!reports/m2_1A_all_s*/model.pt
+!reports/m3_1A_all_s*/model.pt
