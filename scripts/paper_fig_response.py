@@ -34,6 +34,7 @@ def summarise(reco, y, prongs, offs):
     nkin = np.bincount(seg, weights=(prongs[:, 2] > 0.5).astype(float), minlength=len(n))
     return {"reco": reco, "ratio": np.linalg.norm(y[:, :3], axis=1) / 1e3 / Pt[reco], "recoil": y[:, 6] / 1e3, "pP": np.where(lead > 0, lead, np.nan), "piP": np.where(leadpi > 0, leadpi, np.nan), "n": n.astype(float), "nkin": nkin}
 import pickle
+SE = {}
 if not a.replot:
     first = None; S = {}
     for spec in a.models:
@@ -52,13 +53,12 @@ if not a.replot:
             Np = max(p.shape[1] for p in PR); PR_ = torch.cat([torch.nn.functional.pad(p, (0, 0, 0, Np - p.shape[1])) for p in PR]).numpy(); PM_ = torch.cat([torch.nn.functional.pad(p, (0, Np - p.shape[1])) for p in PM]).numpy()
             ex = torch.cat(EX).numpy(); X1_ = torch.cat(X1).numpy(); y = tf.inverse(X1_[ex], d["mu_true"][idx][ex], d["ctx"][idx][ex])
             pm = PM_[ex]; pr = ptf.inverse(PR_[ex][pm]); offs = np.concatenate([[0], np.cumsum(pm.sum(1))]); return summarise(ex, y, pr, offs)
-        if members:  # ensemble: one common-noise pass per member; the spread is the model uncertainty
-            draws = [one_pass(model, 0)] + [one_pass(load_model(f"{md}/model.pt")[0], 0) for md in members]
-        else:        # no ensemble: regenerations with different noise; the spread is the sampling uncertainty only
-            draws = [one_pass(model, kd) for kd in range(a.draws)]
-        S[f"surrogate ({NAMES.get(lab, lab)})" if len(a.models) > 1 else "surrogate"] = draws; print(lab, "sampled", len(draws), "draws", flush=True)
-if not a.replot: pickle.dump({"S": S, "Pt": Pt, "keh": keh, "kep": kep, "kpi": kpi, "nch": nch}, open(a.out + "_cache.pkl", "wb"))
-else: C_ = pickle.load(open(a.out + "_cache.pkl", "rb")); S, Pt, keh, kep, kpi, nch = (C_[k] for k in ("S", "Pt", "keh", "kep", "kpi", "nch"))
+        key = f"surrogate ({NAMES.get(lab, lab)})" if len(a.models) > 1 else "surrogate"
+        S[key] = [one_pass(model, kd) for kd in range(a.draws)]  # regenerations with different noise: the sampling (statistical) spread of a sample of this size
+        if members: SE[key] = [one_pass(model, 0)] + [one_pass(load_model(f"{md}/model.pt")[0], 0) for md in members]  # one common-noise pass per member: the between-member (model) spread
+        print(lab, "sampled", len(S[key]), "regenerations,", len(SE.get(key, [])), "members", flush=True)
+if not a.replot: pickle.dump({"S": S, "SE": SE, "Pt": Pt, "keh": keh, "kep": kep, "kpi": kpi, "nch": nch}, open(a.out + "_cache.pkl", "wb"))
+else: C_ = pickle.load(open(a.out + "_cache.pkl", "rb")); S, Pt, keh, kep, kpi, nch = (C_[k] for k in ("S", "Pt", "keh", "kep", "kpi", "nch")); SE = C_.get("SE", {})
 STY = {"open dataset": (plots.PALETTE["real"], "o", "-")}; cyc = [(plots.PALETTE["model"], "s", "--"), (plots.PALETTE["third"], "^", ":")]
 for i, k in enumerate([k for k in S if k != "open dataset"]): STY[k] = cyc[i]
 def stat(x, yv, a_, b_, kind):
@@ -81,7 +81,9 @@ def prof(ax, xfull, key, edges, kind="median", logx=True, xs=None, q=None, legen
             ax.errorbar(xs, m, e, fmt=mk, ms=3.5, color=c, mfc=(q or {}).get("mfc", c), capsize=0, label=k, zorder=3)
         else:
             M = np.array([[stat(xfull[dv["reco"]], dv[key], a_, b_, kind)[0] for a_, b_ in edges_ok] for dv in v])
-            mu, sd = np.nanmean(M, 0), np.nanstd(M, 0, ddof=1)
+            mu, sd = np.nanmean(M, 0), np.nanstd(M, 0, ddof=1)  # regenerations: sampling spread
+            if k in SE:  # members with common noise: the model spread, added in quadrature
+                ME = np.array([[stat(xfull[dv["reco"]], dv[key], a_, b_, kind)[0] for a_, b_ in edges_ok] for dv in SE[k]]); sd = np.sqrt(sd ** 2 + np.nanstd(ME, 0, ddof=1) ** 2)
             if k not in NOBAND: ax.fill_between(xs, mu - sd, mu + sd, color=c, alpha=0.35, lw=0)
             ax.plot(xs, mu, ls=ls, color=c, lw=1.4, label=k)
     if logx: ax.set_xscale("log")

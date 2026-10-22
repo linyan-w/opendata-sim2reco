@@ -24,15 +24,24 @@ plots.save(fig, out / "ensemble_bins.png")
 fig, axs = plots.plt.subplots(1, 2, figsize=(8.8, 3.3)); fig.subplots_adjust(wspace=0.55)
 for ax, name, lab, panel in zip(axs, ("true angle [deg]", "true pT [GeV]"), (r"true muon angle [$^\circ$]", r"true muon $p_T$ [GeV]"), ("(a)", "(b)")):
     rows = S["per_event"][name]; x = np.arange(len(rows))
-    ax.plot(x, [100 * r["relP"] for r in rows], "o-", color=plots.PALETTE["real"], ms=4, label="muon momentum: between members (left)"); ax.set_ylabel("muon momentum [%]"); ax.set_ylim(0, None)
-    ax2 = ax.twinx(); ax2.plot(x, [r["dz"] for r in rows], "s-", color=plots.PALETTE["model"], ms=4, label="vertex $z$: between members (right)"); ax2.set_ylabel("vertex $z$ [mm]"); ax2.grid(False); ax2.spines["right"].set_visible(True); ax2.set_ylim(0, None)
-    if "resP" in rows[0]:  # the surrogate's own stochastic resolution per event (two draws of the nominal member): the statistical part, which does not grow
-        ax.plot(x, [100 * r["resP"] for r in rows], "o:", color=plots.PALETTE["real"], mfc="white", ms=4, label="muon momentum: resolution of one model (left)")
-        ax2.plot(x, [r["resz"] for r in rows], "s:", color=plots.PALETTE["model"], mfc="white", ms=4, label="vertex $z$: resolution of one model (right)")
+    ax.plot(x, [100 * r["relP"] for r in rows], "o-", color=plots.PALETTE["real"], ms=4, label="muon momentum (left)"); ax.set_ylabel("spread of the muon momentum [%]"); ax.set_ylim(0, None)
+    ax2 = ax.twinx(); ax2.plot(x, [r["dz"] for r in rows], "s-", color=plots.PALETTE["model"], ms=4, label="vertex $z$ (right)"); ax2.set_ylabel("spread of the vertex $z$ [mm]"); ax2.grid(False); ax2.spines["right"].set_visible(True); ax2.set_ylim(0, None)
     ax.set_xticks(x); ax.set_xticklabels([r["bin"].strip("[)").replace(",", "–") for r in rows], rotation=60, fontsize=6.5); ax.set_xlabel(lab); ax.text(0.03, 0.95, panel, transform=ax.transAxes, va="top")
     if name == "true angle [deg]":
-        h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels(); ax.legend(h1 + h2, l1 + l2, frameon=False, fontsize=6.5, loc="upper left")
+        h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels(); ax.legend(h1 + h2, l1 + l2, frameon=False, fontsize=7.5, loc="center left")
 plots.save(fig, out / "ensemble_perevent.png"); print("written", out / "ensemble_bins.png", out / "ensemble_perevent.png")
+# ---- per event, candidate: between-member spread against the surrogate's own resolution (two draws of the nominal, the statistical part), log scale
+if "resP" in S["per_event"]["true angle [deg]"][0]:
+    fig, axs = plots.plt.subplots(2, 2, figsize=(8.4, 5.6), sharex="col"); fig.subplots_adjust(hspace=0.12, wspace=0.3)
+    for j, (name, lab) in enumerate((("true angle [deg]", r"true muon angle [$^\circ$]"), ("true pT [GeV]", r"true muon $p_T$ [GeV]"))):
+        rows = S["per_event"][name]; x = np.arange(len(rows))
+        for i, (kr, ke, yl, scale) in enumerate((("resP", "relP", "muon momentum [%]", 100), ("resz", "dz", "vertex $z$ [mm]", 1))):
+            ax = axs[i, j]; ax.plot(x, [scale * r[kr] / 0.6745 for r in rows], "s--", color="0.45", mfc="white", ms=4, label="resolution of one model (two draws, same weights)")
+            ax.plot(x, [scale * r[ke] for r in rows], "o-", color=plots.PALETTE["real"], ms=4, label="between members (same random numbers)")
+            ax.set_ylim(0, None); ax.set_ylabel(yl); ax.set_xticks(x); ax.set_xticklabels([r["bin"].strip("[)").replace(",", "–") for r in rows], rotation=60, fontsize=6.5)
+            ax.text(0.03, 0.93, "(" + "abcd"[2 * i + j] + ")", transform=ax.transAxes, va="top")
+            if i == 1: ax.set_xlabel(lab)
+    axs[0, 0].legend(frameon=False, fontsize=7, loc="lower right"); plots.save(fig, out / "ensemble_perevent_res.png"); print("written", out / "ensemble_perevent_res.png")
 # ---- pulls of the marginal bin fractions without and with the between-member spread in the denominator
 KEYS = {"marg_recoil": "recoil energy", "marg_muP": "muon momentum", "marg_theta": "muon angle", "marg_vz": "vertex $z$"}; COL = [plots.PALETTE["real"], plots.PALETTE["model"], plots.PALETTE["third"], "0.6"]
 fig, ax = plots.plt.subplots(figsize=(4.4, 3.3)); b = np.linspace(-5, 5, 26); xx = np.linspace(-5, 5, 300); P = {}; P0 = {}
