@@ -71,8 +71,9 @@ def main():
         """One full generation pass; a fixed seed gives the same base noise, so repeated passes differ only through the weights.
         prongs=False skips the prong-set flow (the epistemic draws use only event-level outputs and the vertex class).
         mixture: each batch is drawn from a random ensemble member (recorded in MEMBER)."""
-        torch.manual_seed(seed); S, PR, PM, VC, P0, PN = [], [], [], [], [], []; rng = np.random.default_rng(seed + 77)
-        for b in loader():
+        S, PR, PM, VC, P0, PN = [], [], [], [], [], []; rng = np.random.default_rng(seed + 77)
+        for i, b in enumerate(loader()):
+            torch.manual_seed(seed * 100003 + i)  # per-batch seed: the event-level draw is identical between passes with and without prongs and across members (common noise)
             m_ = members[rng.integers(len(members))] if mixture else model
             if mixture: MEMBER.append(np.full(len(b["ctx"]), members.index(m_), np.int32))
             s = m_.sample(to_dev(b, "cuda"), a.steps, prongs=prongs)
@@ -165,6 +166,21 @@ def main():
                 vck = torch.cat(VCk).numpy()[exist]; zk = tf.planes.z_for_class(vck, d["ctx"][exist, 2], yk[:, 5]); yk[:, 5] = np.where(vck > 0, zk, yk[:, 5])
             Ys.append(yk); Ps.append(P0k[exist]); Ns.append(Sk[exist, 3])
         Ys = np.array(Ys); sd = Ys.std(0)
+        if a.ensemble:
+            # universes: member k's event-level outputs for every written event (common noise), and the weight that turns the
+            # nominal row set into member k's reconstruction probabilities (Bernoulli ratios for the reco, MINOS and charge
+            # flags given the nominal outcomes); the analysis fills one histogram per universe with these values and weights
+            from sim2reco.prep.frames import theta_phi_beam
+            K = len(Ys); Pn = P0[exist]; Pk = np.array(Ps); eps = 1e-6
+            w = np.clip(Pk[:, :, 0], eps, 1) / np.clip(Pn[None, :, 0], eps, 1)
+            w *= np.where(minos[None, :], np.clip(Pk[:, :, 1], eps, 1) / np.clip(Pn[None, :, 1], eps, 1), np.clip(1 - Pk[:, :, 1], eps, 1) / np.clip(1 - Pn[None, :, 1], eps, 1))
+            w *= np.where(minos[None, :], np.where(charge[None, :], np.clip(Pk[:, :, 2], eps, 1) / np.clip(Pn[None, :, 2], eps, 1), np.clip(1 - Pk[:, :, 2], eps, 1) / np.clip(1 - Pn[None, :, 2], eps, 1)), 1.0)
+            out["surrogate_univ_weight"] = np.ascontiguousarray(w.T)
+            Pu = np.linalg.norm(Ys[:, :, :3], axis=2); thu = np.array([theta_phi_beam(y[:, 0], y[:, 1], y[:, 2])[0] for y in Ys])
+            for name, arr in (("muon_P", Pu), ("muon_theta", thu), ("muon_Px", Ys[:, :, 0]), ("muon_Py", Ys[:, :, 1]), ("muon_Pz", Ys[:, :, 2]), ("vtx_x", Ys[:, :, 3]), ("vtx_y", Ys[:, :, 4]), ("vtx_z", Ys[:, :, 5]),
+                              ("recoil_E", Ys[:, :, 6]), ("recoil_nonvtx100", Ys[:, :, 9]), ("nonvtx_iso_blobs_E", Ys[:, :, 10])):
+                out[f"surrogate_univ_{name}"] = np.ascontiguousarray(arr.T.astype(np.float64))
+            out["surrogate_univ_n_prongs"] = np.ascontiguousarray((np.array(Ns).astype(np.int32) + 1).T); out["surrogate_univ_members"] = np.full(exist.sum(), K, np.int32)
         for j, c in enumerate("xyz"): out[f"surrogate_epi_muon_P{c}"] = sd[:, j]
         out["surrogate_epi_muon_P"] = np.linalg.norm(Ys[:, :, :3], axis=2).std(0)
         for j, c in enumerate("xyz"): out[f"surrogate_epi_vtx_{c}"] = sd[:, 3 + j]

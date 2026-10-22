@@ -1366,12 +1366,27 @@ the events from outside.}
 \label{tab:ens-auc}
 \end{table}
 
-\paragraph{What to use.} The ensemble spread says where the model is uncertain and the model-error floor of
-Section~\ref{sec:bayes} says how large the residual is where it is not: the honest per-bin uncertainty is the
-spread added in quadrature to the floor, and neither alone. The ensemble files of the three inclusive samples
-(\texttt{surrogate\_Eall\_*}) reproduce the single-model comparisons of Section~\ref{sec:inclusive} (the GENIE
-closure gives \nIncGBGenOutFrac{} of selected events from outside the fiducial volume against
-\nIncGBRefOutFrac{} with either) and carry the ensemble columns.
+\paragraph{What to use, and how it is delivered.} The ensemble spread says where the model is uncertain and the
+model-error floor of Section~\ref{sec:bayes} says how large the residual is where it is not: the honest per-bin
+uncertainty is the spread added in quadrature to the floor, and neither alone. A per-event standard deviation is
+not something an analysis can propagate, since it says nothing about how bins move together, so the ensemble
+files (\texttt{surrogate\_Eall\_*}, the GENIE and GiBUU inclusive samples; \texttt{docs/surrogate\_files.md})
+deliver the members as \emph{universes}, the form MINERvA uses for its own systematics. Every written event
+carries, for each member $k$, the member's event-level outputs drawn with the same noise
+(\texttt{surrogate\_univ\_muon\_P[k]}, \texttt{\_muon\_theta}, \texttt{\_vtx\_x/y/z}, \texttt{\_recoil\_E},
+\ldots, \texttt{\_n\_prongs}) and a weight \texttt{surrogate\_univ\_weight[k]}, the ratio of member $k$'s to the
+nominal member's probabilities for the reconstruction, MINOS and charge outcomes of that event, which turns the
+nominal row set into member $k$'s reconstruction and matching probabilities. The nominal sample is exactly the
+universe of the member that drew it (\texttt{surrogate\_member}); the analysis fills one histogram per universe
+with those values and weights and takes the spread around the nominal as a bin-to-bin correlated band, or the
+covariance of the universes. Prong-level variables are nominal only (a prong-flow pass per member would multiply
+the cost), and four universes give a band, not a well-determined covariance matrix. The per-event
+\texttt{surrogate\_epi\_*} columns of these files are the standard deviation over the universes. The Bayesian
+last layers of Section~\ref{sec:bayes} are no longer part of the delivered files: their binned uncertainty is
+zero by construction and the ensemble flags unfamiliar events better; the section stays as the record of that
+result. The ensemble files reproduce the single-model comparisons of Section~\ref{sec:inclusive} (the GENIE closure
+gives \nIncGBGenOutFrac{} of selected events from outside the fiducial volume against \nIncGBRefOutFrac{} with
+either).
 \FloatBarrier
 
 \section{Known limitations}

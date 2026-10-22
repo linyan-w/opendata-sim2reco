@@ -45,6 +45,6 @@
 \contentsline {section}{\numberline {10}Ensemble of the deployed model}{48}{section.10}%
 \contentsline {paragraph}{Does the spread cover the residual?}{49}{section*.33}%
 \contentsline {paragraph}{Does the spread grow where the data are sparse?}{49}{section*.34}%
-\contentsline {paragraph}{What to use.}{49}{section*.35}%
+\contentsline {paragraph}{What to use, and how it is delivered.}{49}{section*.35}%
 \contentsline {section}{\numberline {11}Known limitations}{52}{section.11}%
 \contentsline {section}{\numberline {A}Data conventions that had to be handled}{52}{appendix.A}%
