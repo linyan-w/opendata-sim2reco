@@ -16,8 +16,9 @@ from sim2reco.train.m3 import load_model
 from sim2reco.train.m2 import to_dev, _pad
 from sim2reco.eval import plots
 NAMES = {"A": "full model", "B": "2p2h holdout"}  # legend names of the model labels
-ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--models", nargs="+", required=True); ap.add_argument("--only-inttype", type=int, nargs="*", default=None); ap.add_argument("--subset", default=None, help="all-events models: restrict the test events to this subset (ccnumu, nc, other)"); ap.add_argument("--n", type=int, default=300000); ap.add_argument("--draws", type=int, default=8); ap.add_argument("--replot", action="store_true", help="re-draw from OUT_PREFIX_cache.pkl"); a = ap.parse_args()
-from sim2reco.models.bayes_last import GaussianLastLayer, heads_for, head_layer
+ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--models", nargs="+", required=True); ap.add_argument("--only-inttype", type=int, nargs="*", default=None); ap.add_argument("--subset", default=None, help="all-events models: restrict the test events to this subset (ccnumu, nc, other)"); ap.add_argument("--n", type=int, default=300000); ap.add_argument("--draws", type=int, default=8); ap.add_argument("--replot", action="store_true", help="re-draw from OUT_PREFIX_cache.pkl"); ap.add_argument("--ensemble", nargs="*", default=[], help="LABEL=DIR further ensemble members of a model (e.g. A=reports/m3_1A_all_s1): the band of that model is the between-member spread with common noise"); a = ap.parse_args()
+ENS = {}
+for spec in a.ensemble: lab_, md_ = spec.split("="); ENS.setdefault(lab_, []).append(md_)
 cfg0 = torch.load(a.models[0].split("=")[1] + "/model.pt", map_location="cpu", weights_only=False)["config"]
 d = load_compact(sorted(p[:-len(".truth.parquet")] for p in glob.glob("data/slim_1A/*.truth.parquet")), **selection_from_config(cfg0)); split = split_by_subrun(d["subrun"], seed=0)
 te = np.where(split == 2)[0]
@@ -41,20 +42,20 @@ if not a.replot:
             r = d["reco_exists"][idx] & ds.valid; ir = idx[r]
             offs = np.concatenate([[0], np.cumsum(np.diff(d["p_offsets"])[ir])]); pr = np.concatenate([d["prongs"][d["p_offsets"][e]:d["p_offsets"][e + 1]] for e in ir])
             S["open dataset"] = summarise(r, d["tier1"][ir], pr, offs); first = lab
-        post = {k: GaussianLastLayer.from_state(v, "cuda") for k, v in torch.load(f"{D}/bayes_last.pt", map_location="cpu", weights_only=False).items()}
-        layers = {k: head_layer(model, p) for k, (p, _) in heads_for(model).items()}; W0 = {k: (l.weight.data.clone(), l.bias.data.clone()) for k, l in layers.items()}
-        gen = torch.Generator(device="cuda"); gen.manual_seed(123); draws = []
-        for kd in range(a.draws):  # posterior weight draw + fresh generation: the spread over draws is epistemic + the surrogate's own sampling uncertainty
-            for k in layers:
-                if k in post: dW, db = post[k].sample_delta(gen); layers[k].weight.data = W0[k][0] + dW; layers[k].bias.data = W0[k][1] + db
-            torch.manual_seed(kd); X1, EX, PR, PM = [], [], [], []
+        members = ENS.get(lab, [])
+        def one_pass(mdl, seed):
+            torch.manual_seed(seed); X1, EX, PR, PM = [], [], [], []
             with torch.no_grad():
-                for b in DataLoader(ds, batch_size=4096, collate_fn=collate, num_workers=4):
-                    s = model.sample(to_dev(b, "cuda"), 64); X1.append(s["x1"].cpu()); EX.append(s["exist"].cpu()); PR.append(s["prongs"].cpu()); PM.append(s["pmask"].cpu())
-            Np = max(p.shape[1] for p in PR); PR = torch.cat([torch.nn.functional.pad(p, (0, 0, 0, Np - p.shape[1])) for p in PR]).numpy(); PM = torch.cat([torch.nn.functional.pad(p, (0, Np - p.shape[1])) for p in PM]).numpy()
-            ex = torch.cat(EX).numpy(); X1 = torch.cat(X1).numpy(); y = tf.inverse(X1[ex], d["mu_true"][idx][ex], d["ctx"][idx][ex])
-            pm = PM[ex]; pr = ptf.inverse(PR[ex][pm]); offs = np.concatenate([[0], np.cumsum(pm.sum(1))]); draws.append(summarise(ex, y, pr, offs))
-        for k in layers: layers[k].weight.data, layers[k].bias.data = W0[k]
+                for i_, b in enumerate(DataLoader(ds, batch_size=4096, collate_fn=collate, num_workers=4)):
+                    torch.manual_seed(seed * 100003 + i_)  # per-batch seed: common noise across members
+                    s = mdl.sample(to_dev(b, "cuda"), 64); X1.append(s["x1"].cpu()); EX.append(s["exist"].cpu()); PR.append(s["prongs"].cpu()); PM.append(s["pmask"].cpu())
+            Np = max(p.shape[1] for p in PR); PR_ = torch.cat([torch.nn.functional.pad(p, (0, 0, 0, Np - p.shape[1])) for p in PR]).numpy(); PM_ = torch.cat([torch.nn.functional.pad(p, (0, Np - p.shape[1])) for p in PM]).numpy()
+            ex = torch.cat(EX).numpy(); X1_ = torch.cat(X1).numpy(); y = tf.inverse(X1_[ex], d["mu_true"][idx][ex], d["ctx"][idx][ex])
+            pm = PM_[ex]; pr = ptf.inverse(PR_[ex][pm]); offs = np.concatenate([[0], np.cumsum(pm.sum(1))]); return summarise(ex, y, pr, offs)
+        if members:  # ensemble: one common-noise pass per member; the spread is the model uncertainty
+            draws = [one_pass(model, 0)] + [one_pass(load_model(f"{md}/model.pt")[0], 0) for md in members]
+        else:        # no ensemble: regenerations with different noise; the spread is the sampling uncertainty only
+            draws = [one_pass(model, kd) for kd in range(a.draws)]
         S[f"surrogate ({NAMES.get(lab, lab)})" if len(a.models) > 1 else "surrogate"] = draws; print(lab, "sampled", len(draws), "draws", flush=True)
 if not a.replot: pickle.dump({"S": S, "Pt": Pt, "keh": keh, "kep": kep, "kpi": kpi, "nch": nch}, open(a.out + "_cache.pkl", "wb"))
 else: C_ = pickle.load(open(a.out + "_cache.pkl", "rb")); S, Pt, keh, kep, kpi, nch = (C_[k] for k in ("S", "Pt", "keh", "kep", "kpi", "nch"))
