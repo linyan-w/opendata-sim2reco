@@ -30,3 +30,16 @@ for ax, name, lab, panel in zip(axs, ("true angle [deg]", "true pT [GeV]"), (r"t
     if name == "true angle [deg]":
         h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels(); ax.legend(h1 + h2, l1 + l2, frameon=False, fontsize=7.5, loc="center left")
 plots.save(fig, out / "ensemble_perevent.png"); print("written", out / "ensemble_bins.png", out / "ensemble_perevent.png")
+# ---- pulls of the marginal bin fractions without and with the between-member spread in the denominator
+KEYS = {"marg_recoil": "recoil energy", "marg_muP": "muon momentum", "marg_theta": "muon angle", "marg_vz": "vertex $z$"}; COL = [plots.PALETTE["real"], plots.PALETTE["model"], plots.PALETTE["third"], "0.6"]
+fig, axs = plots.plt.subplots(1, 2, figsize=(8.4, 3.3)); b = np.linspace(-5, 5, 26); xx = np.linspace(-5, 5, 300)
+for ax, with_ens, lab in zip(axs, (False, True), ("(a) without the spread", "(b) with the spread")):
+    P = {}
+    for k in KEYS:
+        rows = S["tables"][k]["rows"]; res = np.array([r["resid"] for r in rows]); den = np.sqrt(np.array([r["stat"] for r in rows]) ** 2 + np.array([r["samp"] for r in rows]) ** 2 + (np.array([r["ens"] for r in rows]) ** 2 if with_ens else 0))
+        P[k] = res / den
+    allp = np.concatenate(list(P.values()))
+    ax.hist([np.clip(P[k], -4.99, 4.99) for k in KEYS], b, stacked=True, label=list(KEYS.values()), color=COL, alpha=0.8)
+    ax.plot(xx, len(allp) * (b[1] - b[0]) * np.exp(-xx ** 2 / 2) / np.sqrt(2 * np.pi), "k:", lw=1.2, label="unit Gaussian")
+    ax.set_xlabel("pull"); ax.set_ylabel("bins"); ax.set_title(f"{lab}: RMS {np.sqrt(np.mean(allp ** 2)):.2f}, {100 * np.mean(np.abs(allp) < 2):.0f}% within 2", fontsize=8.5, loc="left")
+axs[0].legend(frameon=False, fontsize=7, loc="upper left"); plots.save(fig, out / "ensemble_pulls.png"); print("written", out / "ensemble_pulls.png")
