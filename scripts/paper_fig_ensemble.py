@@ -51,5 +51,6 @@ for k in KEYS:
 allp = np.concatenate(list(P.values())); all0 = np.concatenate(list(P0.values()))
 ax.hist([np.clip(P[k], -4.99, 4.99) for k in KEYS], b, stacked=True, label=list(KEYS.values()), color=COL, alpha=0.8)
 ax.plot(xx, len(allp) * (b[1] - b[0]) * np.exp(-xx ** 2 / 2) / np.sqrt(2 * np.pi), "k:", lw=1.2, label="unit Gaussian")
-ax.set_xlabel("pull"); ax.set_ylabel("bins"); ax.set_title(f"RMS {np.sqrt(np.mean(allp ** 2)):.2f}, {100 * np.mean(np.abs(allp) < 2):.0f}% within 2  (without the spread: RMS {np.sqrt(np.mean(all0 ** 2)):.2f})", fontsize=8, loc="left")
+ax.set_xlabel("pull"); ax.set_ylabel("bins"); ax.set_title(f"RMS {np.sqrt(np.mean(allp ** 2)):.2f}, {100 * np.mean(np.abs(allp) < 2):.0f}% within 2", fontsize=8.5, loc="left")
 ax.legend(frameon=False, fontsize=7, loc="upper left"); plots.save(fig, out / "ensemble_pulls.png"); print("written", out / "ensemble_pulls.png")
+pathlib.Path(a.spread).parent.joinpath("pull_macros.tex").write_text("% pulls of the marginal bin fractions, all four observables (scripts/paper_fig_ensemble.py)\n" + f"\\newcommand{{\\nEnsPullAllRMS}}{{{np.sqrt(np.mean(allp ** 2)):.2f}}}\n\\newcommand{{\\nEnsPullAllWithin}}{{{100 * np.mean(np.abs(allp) < 2):.0f}\\%}}\n\\newcommand{{\\nEnsPullAllBins}}{{{len(allp)}}}\n\\newcommand{{\\nEnsPullAllRMSnoens}}{{{np.sqrt(np.mean(all0 ** 2)):.2f}}}\n")
