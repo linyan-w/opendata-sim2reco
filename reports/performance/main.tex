@@ -556,6 +556,21 @@ its own, and the median density ratio rest/process over the process's events.}
 \label{tab:coverage}
 \end{table}
 
+\paragraph{Closure by isolation.} The same density ratio, recomputed on the all-events population with the
+2p2h-blind model's actual training set as the ``rest'' (classifier AUC 0.989; 83\% of the held-out 2p2h test
+events lie where the rest is below a tenth of the 2p2h density and 35\% below a hundredth), serves to ask where
+the 2p2h-blind model's response differs from the full model's (\texttt{scripts/holdout\_isolation.py},
+\texttt{paper\_fig\_holdout\_isolation.py}). It does not differ anywhere. In bins of the isolation spanning four
+decades, the reconstruction probability, the muon momentum response, the recoil energy, the proton-fit fraction and
+the prong count of both models follow the open dataset within its statistical error plus the surrogate's sampling
+error; the pull RMS over the bins is 0.4--0.8 for the 2p2h-blind model and 0.6--1.1 for the full model, with no
+bin beyond 2.3. Binned instead by the physical final state of the pure two-nucleon, no-pion events (45\% of
+2p2h: nucleon opening angle, momentum share of the leading nucleon, hadronic energy, proton count), the largest
+pull of the 2p2h-blind model is 1.4. The mode is isolated in event space but not in the space the response
+depends on: the model learns the detector's response per particle, and a 2p2h final state is a muon and two
+nucleons at momenta it has seen millions of times. The holdout is therefore a closure test of composition, not a
+region where the model's uncertainty is expected to grow, and no ensemble of the 2p2h-blind model is trained.
+
 \section{Input definition: threshold and neutrons}
 \label{sec:inputdef}
 

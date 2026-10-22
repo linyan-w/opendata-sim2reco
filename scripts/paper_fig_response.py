@@ -16,8 +16,8 @@ from sim2reco.train.m3 import load_model
 from sim2reco.train.m2 import to_dev, _pad
 from sim2reco.eval import plots
 NAMES = {"A": "full model", "B": "2p2h holdout"}  # legend names of the model labels
-ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--models", nargs="+", required=True); ap.add_argument("--only-inttype", type=int, nargs="*", default=None); ap.add_argument("--subset", default=None, help="all-events models: restrict the test events to this subset (ccnumu, nc, other)"); ap.add_argument("--n", type=int, default=300000); ap.add_argument("--draws", type=int, default=8); ap.add_argument("--replot", action="store_true", help="re-draw from OUT_PREFIX_cache.pkl"); ap.add_argument("--ensemble", nargs="*", default=[], help="LABEL=DIR further ensemble members of a model (e.g. A=reports/m3_1A_all_s1): the band of that model is the between-member spread with common noise"); a = ap.parse_args()
-ENS = {}
+ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--models", nargs="+", required=True); ap.add_argument("--only-inttype", type=int, nargs="*", default=None); ap.add_argument("--subset", default=None, help="all-events models: restrict the test events to this subset (ccnumu, nc, other)"); ap.add_argument("--n", type=int, default=300000); ap.add_argument("--draws", type=int, default=8); ap.add_argument("--replot", action="store_true", help="re-draw from OUT_PREFIX_cache.pkl"); ap.add_argument("--no-band", nargs="*", default=[], help="model labels drawn as a line only, without a band (e.g. B: the holdout model has no ensemble)"); ap.add_argument("--ensemble", nargs="*", default=[], help="LABEL=DIR further ensemble members of a model (e.g. A=reports/m3_1A_all_s1): the band of that model is the between-member spread with common noise"); a = ap.parse_args()
+ENS = {}; NOBAND = {f"surrogate ({NAMES.get(l, l)})" for l in a.no_band} | ({"surrogate"} if a.no_band and len(a.models) == 1 else set())
 for spec in a.ensemble: lab_, md_ = spec.split("="); ENS.setdefault(lab_, []).append(md_)
 cfg0 = torch.load(a.models[0].split("=")[1] + "/model.pt", map_location="cpu", weights_only=False)["config"]
 d = load_compact(sorted(p[:-len(".truth.parquet")] for p in glob.glob("data/slim_1A/*.truth.parquet")), **selection_from_config(cfg0)); split = split_by_subrun(d["subrun"], seed=0)
@@ -82,7 +82,8 @@ def prof(ax, xfull, key, edges, kind="median", logx=True, xs=None, q=None, legen
         else:
             M = np.array([[stat(xfull[dv["reco"]], dv[key], a_, b_, kind)[0] for a_, b_ in edges_ok] for dv in v])
             mu, sd = np.nanmean(M, 0), np.nanstd(M, 0, ddof=1)
-            ax.fill_between(xs, mu - sd, mu + sd, color=c, alpha=0.35, lw=0); ax.plot(xs, mu, ls=ls, color=c, lw=1.4, label=k)
+            if k not in NOBAND: ax.fill_between(xs, mu - sd, mu + sd, color=c, alpha=0.35, lw=0)
+            ax.plot(xs, mu, ls=ls, color=c, lw=1.4, label=k)
     if logx: ax.set_xscale("log")
     if legend: ax.legend(frameon=False, fontsize=7)
 from matplotlib.lines import Line2D

@@ -24,15 +24,19 @@ d = load_compact(sorted(p[:-len(".truth.parquet")] for p in glob.glob("data/slim
 te = np.where(split == 2)[0]
 if a.subset: te = te[subset_mask(d, a.subset)[te]]
 idx = np.random.default_rng(0).permutation(te)[:a.n]; K = len(a.members)
-# ---- one common-noise pass per member
-EX, MI, CH, Y = [], [], [], []
-for md in a.members:
-    model, tf, ptf = load_model(f"{md}/model.pt"); ds = CompactDataset(d, idx, tf, 0, prong_tf=ptf); torch.manual_seed(0); X1, ex, mi, ch, VC = [], [], [], [], []
+# ---- one common-noise pass per member, and a second-noise pass of the nominal member (per-event resolution)
+def one_pass(md, seed):
+    model, tf, ptf = load_model(f"{md}/model.pt"); ds = CompactDataset(d, idx, tf, 0, prong_tf=ptf); torch.manual_seed(seed); X1, ex, mi, ch, VC = [], [], [], [], []
     with torch.no_grad():
         for b in DataLoader(ds, batch_size=4096, collate_fn=collate, num_workers=4):
             s = model.sample(to_dev(b, "cuda"), a.steps, prongs=False); X1.append(s["x1"].cpu()); ex.append(s["exist"].cpu()); mi.append(s["minos"].cpu()); ch.append(s["charge"].cpu()); VC.append(s["vclass"].cpu())
     x1 = torch.cat(X1).numpy(); vc = torch.cat(VC).numpy(); y = tf.inverse(x1, d["mu_true"][idx], d["ctx"][idx]); zs = tf.planes.z_for_class(vc, d["ctx"][idx, 2], y[:, 5]); y[:, 5] = np.where(vc > 0, zs, y[:, 5])
-    EX.append(torch.cat(ex).numpy()); MI.append(torch.cat(mi).numpy()); CH.append(torch.cat(ch).numpy()); Y.append(y); print(f"{md}: sampled {len(idx):,} events, reco {EX[-1].mean():.4f}", flush=True)
+    ex = torch.cat(ex).numpy(); print(f"{md} (seed {seed}): sampled {len(idx):,} events, reco {ex.mean():.4f}", flush=True)
+    return ex, torch.cat(mi).numpy(), torch.cat(ch).numpy(), y
+EX, MI, CH, Y = [], [], [], []
+for md in a.members:
+    ex_, mi_, ch_, y_ = one_pass(md, 0); EX.append(ex_); MI.append(mi_); CH.append(ch_); Y.append(y_)
+EX2, _, _, Y2 = one_pass(a.members[0], 1)  # the nominal again with other noise
 EX, MI, CH, Y = np.array(EX), np.array(MI), np.array(CH), np.array(Y)
 t0 = d["tier0"][idx]; r_ex, r_mi, r_ch = t0[:, 0] > 0, t0[:, 1] > 0, t0[:, 2] > 0; yr = d["tier1"][idx]
 mu_t = d["mu_true"][idx]; th_t = np.degrees(theta_phi_beam(mu_t[:, 0], mu_t[:, 1], mu_t[:, 2])[0]); P_t = np.linalg.norm(mu_t, axis=1) / 1e3; pT_t, pL_t = P_t * np.sin(np.radians(th_t)), P_t * np.cos(np.radians(th_t))
@@ -68,7 +72,8 @@ report("sel_by_pL", "P(selected) by true pL", binned("sel_by_pL", pL_t, [pL_t] *
 report("selrec_by_pT", "selected by reco pT", binned("selrec_by_pT", np.where(sel_r, Pr * np.sin(np.radians(thr)), -1), [np.where(sel_m[k], Pm[k][0] * np.sin(np.radians(Pm[k][1])), -1) for k in range(K)], ones, onesK, PT, "reco muon pT [GeV]"))
 report("selrec_by_pL", "selected by reco pL", binned("selrec_by_pL", np.where(sel_r, Pr * np.cos(np.radians(thr)), -1), [np.where(sel_m[k], Pm[k][0] * np.cos(np.radians(Pm[k][1])), -1) for k in range(K)], ones, onesK, PL, "reco muon pL [GeV]"))
 # ---- per-event spread between members (events reconstructed by every member), binned in true pT and angle
-allex = EX.all(0); sdP = np.std([Pm[k][0] for k in range(K)], 0, ddof=1) / np.mean([Pm[k][0] for k in range(K)], 0); sdE = np.std([Pm[k][2] for k in range(K)], 0, ddof=1) / np.clip(np.mean([Pm[k][2] for k in range(K)], 0), 1e-3, None); sdz = np.std([Pm[k][3] for k in range(K)], 0, ddof=1)
+allex = EX.all(0) & EX2; P2, _, E2, z2 = kin(Y2); resP = np.abs(Pm[0][0] - P2) / (0.5 * (Pm[0][0] + P2)) / np.sqrt(2); resz = np.abs(Pm[0][3] - z2) / np.sqrt(2)  # per-draw resolution from two draws of the nominal
+sdP = np.std([Pm[k][0] for k in range(K)], 0, ddof=1) / np.mean([Pm[k][0] for k in range(K)], 0); sdE = np.std([Pm[k][2] for k in range(K)], 0, ddof=1) / np.clip(np.mean([Pm[k][2] for k in range(K)], 0), 1e-3, None); sdz = np.std([Pm[k][3] for k in range(K)], 0, ddof=1)
 print("\nper-event between-member spread (events reconstructed by all members), median: rel. muon P, rel. recoil, vertex z [mm]")
 R["per_event"] = {}
 for name, x, edges in (("true pT [GeV]", pT_t, PT), ("true angle [deg]", th_t, [0, 5, 10, 15, 20, 30, 45, 90])):
@@ -76,8 +81,8 @@ for name, x, edges in (("true pT [GeV]", pT_t, PT), ("true angle [deg]", th_t, [
     for lo, hi in zip(edges[:-1], edges[1:]):
         m = allex & (x >= lo) & (x < hi)
         if m.sum() < 200: continue
-        rows.append({"bin": f"[{lo:g},{hi:g})", "n": int(m.sum()), "relP": float(np.median(sdP[m])), "relE": float(np.median(sdE[m])), "dz": float(np.median(sdz[m]))})
-        print(f"  {name:16s} {rows[-1]['bin']:12s} n {m.sum():7d}  P {100*rows[-1]['relP']:.2f}%  recoil {100*rows[-1]['relE']:.2f}%  z {rows[-1]['dz']:.1f} mm")
+        rows.append({"bin": f"[{lo:g},{hi:g})", "n": int(m.sum()), "relP": float(np.median(sdP[m])), "relE": float(np.median(sdE[m])), "dz": float(np.median(sdz[m])), "resP": float(np.median(resP[m])), "resz": float(np.median(resz[m]))})
+        print(f"  {name:16s} {rows[-1]['bin']:12s} n {m.sum():7d}  P {100*rows[-1]['relP']:.2f}% (resolution {100*rows[-1]['resP']:.2f}%)  recoil {100*rows[-1]['relE']:.2f}%  z {rows[-1]['dz']:.1f} mm (resolution {rows[-1]['resz']:.1f} mm)")
     R["per_event"][name] = rows
 json.dump(R, open(out / "spread.json", "w"), indent=1, default=float)
 # ---- figure: residual and ensemble band per bin for the selection tables and two marginals
