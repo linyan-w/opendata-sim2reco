@@ -27,6 +27,7 @@ if a.subset: te = te[subset_mask(d, a.subset)[te]]
 idx = np.random.default_rng(0).permutation(te)[:a.n]
 cls, mom, mask = _pad(d, idx); X, names = event_features(cls, mom, mask, d["ctx"][idx])
 keh, kep = X[:, names.index("sumKE_had")], X[:, names.index("maxKE_p")]; kpi = np.maximum(X[:, names.index("maxKE_pip")], X[:, names.index("maxKE_pim")]); nch = d["n_charged_true"][idx].astype(int); Pt = np.linalg.norm(d["mu_true"][idx], axis=1) / 1e3
+Pt = np.where((d["current"][idx] == 1) & (np.abs(d["incoming"][idx]) == 14), Pt, np.nan)  # muon response only for events with a true muon (CC nu_mu and nu_mu-bar); NC and nu_e have no muon
 def summarise(reco, y, prongs, offs):
     """per-event quantities for reconstructed events: muon ratio, recoil [GeV], leading proton-fit and pion-hypothesis P [MeV] (nan if none), n prongs, n with kinematics"""
     n = np.diff(offs); seg = np.repeat(np.arange(len(n)), n); lead = np.full(len(n), -1.0); leadpi = np.full(len(n), -1.0)
@@ -78,7 +79,7 @@ def prof(ax, xfull, key, edges, kind="median", logx=True, xs=None, q=None, legen
         if q: mk, ls = q["marker"], q["ls"]
         if k == "open dataset":
             m, e = np.array([stat(xfull[v["reco"]], v[key], a_, b_, kind) for a_, b_ in edges_ok]).T
-            ax.errorbar(xs, m, e, fmt=mk, ms=3.5, color=c, mfc=(q or {}).get("mfc", c), capsize=0, label=k, zorder=3)
+            ax.errorbar(xs, m, e, fmt=mk, ms=3.5, color=c, mfc=(q or {}).get("mfc", c), capsize=0, label="open MC dataset", zorder=3)
         else:
             M = np.array([[stat(xfull[dv["reco"]], dv[key], a_, b_, kind)[0] for a_, b_ in edges_ok] for dv in v])
             mu, sd = np.nanmean(M, 0), np.nanstd(M, 0, ddof=1)  # regenerations: sampling spread
@@ -109,7 +110,7 @@ for ax, (x, key, hyp, sp) in zip(axs, SPEC):
     ax2 = ax.twinx(); prof(ax2, x, key, e, q=QP, legend=False); ax2.grid(False); ax.set_xlim(e[0], e[-1])
     ax.set_xlabel(f"true leading {sp} kinetic energy [MeV]"); ax.set_ylabel(f"fraction of events with a {hyp} fit"); ax2.set_ylabel(f"median leading {hyp}-fit momentum [MeV]")
     ax2.spines["right"].set_visible(True)
-hs = [Line2D([], [], color=STY[k][0], lw=6, alpha=0.6 if k != "open dataset" else 1, label=k) for k in S]
+hs = [Line2D([], [], color=STY[k][0], lw=6, alpha=0.6 if k != "open dataset" else 1, label="open MC dataset" if k == "open dataset" else k) for k in S]
 hq = [Line2D([], [], color="0.3", marker="o", ls="-", label="fraction with a fit (left)"), Line2D([], [], color="0.3", marker="s", mfc="white", ls="--", label="median fitted momentum (right)")]
 fig.legend(handles=hs + hq, frameon=False, fontsize=7.5, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=len(hs) + len(hq) if len(axs) > 1 else 2)
 fig.tight_layout(); fig.savefig(a.out + "_hadron.png", bbox_inches="tight"); plots.plt.close(fig); print("written", a.out)
