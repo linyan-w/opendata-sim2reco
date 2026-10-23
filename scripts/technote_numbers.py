@@ -35,7 +35,7 @@ def main():
     pv = t["validation"]["prongs_vs_true_charged"]; by = {r[0]: r for r in pv}
     M["nProngsOne"] = f"{by[1][3]:.2f}"; M["nProngsFour"] = f"{by[4][3]:.2f}"; M["nProngsSix"] = f"{by[6][3]:.2f}"; M["nProngsZeroReal"] = f"{by[0][3]:.2f}"; M["nProngsZeroFake"] = f"{by[0][4]:.2f}"; M["nEventsZeroCh"] = f"{by[0][5]:,}".replace(",", "{,}")
     p = t["pid"]; Mr = np.array(p["matrix_masteranadev"]); Mf = np.array(p["matrix_surrogate"])
-    M["nPIDevents"] = f"{p['n_events'][0]:,}".replace(",", "{,}"); M["nPIDprotonHigh"] = pct(Mr[0, 3]); M["nPIDpionHigh"] = pct(Mr[1, 3]); M["nPIDmaxDiff"] = f"{p['max_abs_diff']:.3f}"
+    M["nPIDevents"] = f"{p['n_events'][0]:,}".replace(",", "{,}"); M["nPIDprotonHigh"] = pct(Mr[0, 3]); M["nPIDpionHigh"] = pct(Mr[1, 3]); ok = np.min(np.array(p["n_per_species"]), 0) >= 100; M["nPIDmaxDiff"] = f"{np.abs(Mr - Mf)[ok].max():.3f}"  # species rows with at least 100 events in both samples (an 11-event row is noise)
     M["nPIDaucReal"] = f"{p['score_auc_p_vs_pi'][0]:.3f}"; M["nPIDaucFake"] = f"{p['score_auc_p_vs_pi'][1]:.3f}"; M["nPIDaucGap"] = f"{p['score_auc_p_vs_pi'][0]-p['score_auc_p_vs_pi'][1]:.3f}"
     sm = t["validation"]["score_medians"]; M["nScoreMedPReal"] = f"{sm['lead_p_real']:.2f}"; M["nScoreMedPFake"] = f"{sm['lead_p_fake']:.2f}"; M["nScoreMedPiReal"] = f"{sm['lead_pi_real']:.3f}"; M["nScoreMedPiFake"] = f"{sm['lead_pi_fake']:.3f}"
     v = t["vertex_class"]; o = t["vertex_offset_to_nearest_plane"]
