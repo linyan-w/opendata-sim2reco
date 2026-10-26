@@ -114,3 +114,14 @@ hs = [Line2D([], [], color=STY[k][0], lw=6, alpha=0.6 if k != "open dataset" els
 hq = [Line2D([], [], color="0.3", marker="o", ls="-", label="fraction with a fit (left)"), Line2D([], [], color="0.3", marker="s", mfc="white", ls="--", label="median fitted momentum (right)")]
 fig.legend(handles=hs + hq, frameon=False, fontsize=7.5, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=len(hs) + len(hq) if len(axs) > 1 else 2)
 fig.tight_layout(); fig.savefig(a.out + "_hadron.png", bbox_inches="tight"); plots.plt.close(fig); print("written", a.out)
+if len(SPEC) == 1:  # one species (2p2h: protons only): muon response, recoil and the proton reconstruction as three panels of one figure (paper)
+    x, key, hyp, sp = SPEC[0]
+    fig, (ax1, ax2, ax3) = plots.plt.subplots(1, 3, figsize=(13.2, 3.5))
+    prof(ax1, Pt, "ratio", np.logspace(np.log10(0.5), np.log10(40), 13), legend=False); ax1.set_xlabel("true muon momentum [GeV]"); ax1.set_ylabel(r"median $P_\mathrm{reco}/P_\mathrm{true}$ of the muon")
+    prof(ax2, keh, "recoil", np.logspace(np.log10(30), np.log10(20000), 12), legend=False); ax2.set_yscale("log"); ax2.set_xlabel("true hadronic kinetic energy [MeV]"); ax2.set_ylabel("median recoil energy [GeV]")
+    QF["mfc"] = None; prof(ax3, x, key, e, kind="frac", q=QF, legend=False); ax3.set_ylim(0, 1.05)
+    ax3b = ax3.twinx(); prof(ax3b, x, key, e, q=QP, legend=False); ax3b.grid(False); ax3.set_xlim(e[0], e[-1]); ax3b.spines["right"].set_visible(True)
+    ax3.set_xlabel(f"true leading {sp} kinetic energy [MeV]"); ax3.set_ylabel(f"fraction of events with a {hyp} fit"); ax3b.set_ylabel(f"median leading {hyp}-fit momentum [MeV]")
+    ax1.text(0.97, 0.05, "(a)", transform=ax1.transAxes, ha="right", va="bottom", fontsize=10); [ax.text(0.03, 0.95, f"({lab})", transform=ax.transAxes, va="top", fontsize=10) for ax, lab in ((ax2, "b"), (ax3, "c"))]
+    fig.legend(handles=hs + hq, frameon=False, fontsize=8, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=len(hs) + len(hq))
+    fig.tight_layout(); fig.savefig(a.out + "_combined.png", bbox_inches="tight"); plots.plt.close(fig); print("written", a.out + "_combined.png")
