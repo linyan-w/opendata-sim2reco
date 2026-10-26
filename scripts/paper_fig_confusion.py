@@ -11,7 +11,7 @@ M = json.load(open(pathlib.Path(a.eval) / "metrics_tier2.json"))["confusion_true
 rownorm = lambda C: (lambda C: C / np.clip(C.sum(1, keepdims=True), 1, None))(np.asarray(C, float))
 labels = [str(k) for k in range(6)] + ["6+"]
 fig, axs = plots.plt.subplots(1, 2, figsize=(7.8, 3.4), layout="constrained")
-for ax, (C, title) in zip(axs, ((rownorm(M["masteranadev"]), "open MC dataset"), (rownorm(M["surrogate"]), "surrogate"))):
+for ax, (C, title) in zip(axs, ((rownorm(M["masteranadev"]), "open simulation dataset"), (rownorm(M["surrogate"]), "surrogate"))):
     im = ax.imshow(C, vmin=0, vmax=1, cmap="Blues", origin="lower")
     for i in range(C.shape[0]):
         for j in range(C.shape[1]):
