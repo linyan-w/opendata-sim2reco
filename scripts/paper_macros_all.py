@@ -40,10 +40,9 @@ for tag, key in (("ATwoP", "A_twop"), ("BTwoP", "B_twop"), ("BCtl", "B_ctl"), ("
 parts.append("".join(ci)); (P / "numbers.tex").write_text("\n".join(parts))
 # Table IV: seven-variable closure by column from the macros, prong closure row from the holdout table
 ht = (pathlib.Path(a.holdout) / "tables" / "holdout_summary.tex").read_text(); prong = next(l for l in ht.splitlines() if l.startswith("prong closure AUC"))
-cols = [("ATwoP", "full model, 2p2h"), ("BTwoP", "2p2h holdout, 2p2h"), ("BCtl", "2p2h holdout, control"), ("All", "full model, full test")]
-rows = ["\\begin{tabular}{lcccc}", "\\toprule", " & " + " & ".join(c[1] for c in cols) + " \\\\", "\\midrule",
+cols = [("ATwoP", "full model, 2p2h"), ("BTwoP", "2p2h holdout, 2p2h"), ("BCtl", "2p2h holdout, control")]
+rows = ["\\begin{tabular}{l" + "c" * len(cols) + "}", "\\toprule", " & " + " & ".join(c[1] for c in cols) + " \\\\", "\\midrule",
         "closure AUC, reconstructed only & " + " & ".join(f"\\nAEClo{c[0]}CIMarg{{}}" for c in cols) + " \\\\",
-        "closure AUC, with truth features & " + " & ".join(f"\\nAEClo{c[0]}CICond{{}}" for c in cols) + " \\\\", "\\midrule",
-        "statistical resolution & " + " & ".join(f"\\nAEClo{c[0]}Res{{}}" for c in cols) + " \\\\",
+        "closure AUC, with truth features & " + " & ".join(f"\\nAEClo{c[0]}CICond{{}}" for c in cols) + " \\\\",
         "\\bottomrule", "\\end{tabular}"]  # the two closure rows only (block and prong rows dropped from the paper)
 (P / "tables" / "holdout_summary.tex").write_text("\n".join(rows) + "\n"); print("written", P / "numbers.tex", P / "tables" / "holdout_summary.tex")
