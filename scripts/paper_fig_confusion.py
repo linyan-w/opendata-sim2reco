@@ -22,7 +22,7 @@ for ax, (C, title) in zip(axs[:2], ((A, "(a) open simulation dataset"), (B, "(b)
             if C[i, j] >= 0.005: ax.text(j, i, f"{C[i,j]:.2f}", ha="center", va="center", fontsize=6.5, color="white" if C[i, j] > 0.6 else "black")
     frame(ax, title)
 fig.colorbar(im, ax=axs[:2].tolist(), shrink=0.85, pad=0.02, label="row fraction")
-imd = axs[2].imshow(D, vmin=-0.5, vmax=0.5, cmap="RdBu_r", origin="lower")
+imd = axs[2].imshow(D, vmin=-0.1, vmax=0.1, cmap="RdBu_r", origin="lower")
 for i in range(D.shape[0]):
     for j in range(D.shape[1]):
         if abs(D[i, j]) >= 0.005: axs[2].text(j, i, f"{D[i,j]:+.2f}", ha="center", va="center", fontsize=6.5, color="black")
