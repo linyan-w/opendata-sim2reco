@@ -10,7 +10,7 @@ ap = argparse.ArgumentParser(); ap.add_argument("--eval", default="reports/m3_1A
 M = json.load(open(pathlib.Path(a.eval) / "metrics_tier2.json"))["confusion_true_charged_vs_reco"]
 rownorm = lambda C: (lambda C: C / np.clip(C.sum(1, keepdims=True), 1, None))(np.asarray(C, float))
 labels = [str(k) for k in range(6)] + ["6+"]
-A, B = rownorm(M["masteranadev"]), rownorm(M["surrogate"]); D = 100 * (B - A)
+A, B = rownorm(M["masteranadev"]), rownorm(M["surrogate"]); D = B - A
 fig, axs = plots.plt.subplots(1, 3, figsize=(11.4, 3.4), layout="constrained")
 def frame(ax, title):
     ax.set_xticks(range(7)); ax.set_yticks(range(7)); ax.set_xticklabels(labels, fontsize=8); ax.set_yticklabels(labels, fontsize=8); ax.grid(False)
@@ -22,11 +22,10 @@ for ax, (C, title) in zip(axs[:2], ((A, "(a) open simulation dataset"), (B, "(b)
             if C[i, j] >= 0.005: ax.text(j, i, f"{C[i,j]:.2f}", ha="center", va="center", fontsize=6.5, color="white" if C[i, j] > 0.6 else "black")
     frame(ax, title)
 fig.colorbar(im, ax=axs[:2].tolist(), shrink=0.85, pad=0.02, label="row fraction")
-lim = max(1.0, np.ceil(np.abs(D).max()))
-imd = axs[2].imshow(D, vmin=-lim, vmax=lim, cmap="RdBu_r", origin="lower")
+imd = axs[2].imshow(D, vmin=-0.5, vmax=0.5, cmap="RdBu_r", origin="lower")
 for i in range(D.shape[0]):
     for j in range(D.shape[1]):
-        axs[2].text(j, i, f"{D[i,j]:+.2f}", ha="center", va="center", fontsize=6.5, color="white" if abs(D[i, j]) > 0.6 * lim else "black")
+        if abs(D[i, j]) >= 0.005: axs[2].text(j, i, f"{D[i,j]:+.2f}", ha="center", va="center", fontsize=6.5, color="black")
 frame(axs[2], "(c) surrogate $-$ open simulation dataset")
-fig.colorbar(imd, ax=axs[2], shrink=0.85, pad=0.02, label="difference of row fractions [%]")
-fig.savefig(a.out, dpi=200, bbox_inches="tight", pad_inches=0.05); plots.plt.close(fig); print("written", a.out, "max |diff| %.2f%%" % np.abs(D).max())
+fig.colorbar(imd, ax=axs[2], shrink=0.85, pad=0.02, label="difference of row fractions")
+fig.savefig(a.out, dpi=200, bbox_inches="tight", pad_inches=0.05); plots.plt.close(fig); print("written", a.out, "max |diff| %.3f" % np.abs(D).max())
