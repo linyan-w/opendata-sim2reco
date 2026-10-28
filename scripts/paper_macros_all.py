@@ -28,13 +28,22 @@ blk = {k: float(v) for k, v in re.findall(r"\\newcommand\{\\nAECloAll((?:Mu|Vtx|
 ci.append(f"\\newcommand{{\\nAECloAllBlockMax}}{{{max(blk.values()):.3f}}}\n")
 ci.append(f"\\newcommand{{\\nAECloAllMargBlockMax}}{{{max(v for k, v in blk.items() if k.endswith('Marg')):.3f}}}\n")
 CJ = json.load(open("reports/all_events/closure.json")); ns = [CJ[k][f"null_{t}_std"] for k in ("A_twop", "B_twop") for t in ("marg", "cond") if f"null_{t}_std" in CJ[k]]
-ci.append(f"\\newcommand{{\\nAECloTwoPNullStd}}{{{np.mean(ns):.3f}}}\n")  # label-swap null spread of the closure AUC on the 2p2h test events  # largest block AUC on the test sample, with or without the truth features
+ci.append(f"\\newcommand{{\\nAECloTwoPNullStd}}{{{np.mean(ns):.3f}}}\n")
+# statistical resolution of each closure AUC: the label-swap null spread where it was measured (2p2h), else the Mann-Whitney
+# spread of an uninformative classifier on the evaluation half, sqrt((n1 + n2 + 1) / (12 n1 n2)) with n1 = n2 = n/2
+def _res(key):
+    r = CJ[key]
+    if "null_cond_std" in r: return np.mean([r["null_marg_std"], r["null_cond_std"]])
+    m = r["n"] / 2; return np.sqrt((2 * m + 1) / (12 * m * m))
+for tag, key in (("ATwoP", "A_twop"), ("BTwoP", "B_twop"), ("BCtl", "B_ctl"), ("All", "A_full")):
+    ci.append(f"\\newcommand{{\\nAEClo{tag}Res}}{{{_res(key):.3f}}}\n")  # label-swap null spread of the closure AUC on the 2p2h test events  # largest block AUC on the test sample, with or without the truth features
 parts.append("".join(ci)); (P / "numbers.tex").write_text("\n".join(parts))
 # Table IV: seven-variable closure by column from the macros, prong closure row from the holdout table
 ht = (pathlib.Path(a.holdout) / "tables" / "holdout_summary.tex").read_text(); prong = next(l for l in ht.splitlines() if l.startswith("prong closure AUC"))
 cols = [("ATwoP", "full model, 2p2h"), ("BTwoP", "2p2h holdout, 2p2h"), ("BCtl", "2p2h holdout, control"), ("All", "full model, full test")]
 rows = ["\\begin{tabular}{lcccc}", "\\toprule", " & " + " & ".join(c[1] for c in cols) + " \\\\", "\\midrule",
         "closure AUC, reconstructed only & " + " & ".join(f"\\nAEClo{c[0]}CIMarg{{}}" for c in cols) + " \\\\",
-        "closure AUC, with truth features & " + " & ".join(f"\\nAEClo{c[0]}CICond{{}}" for c in cols) + " \\\\",
+        "closure AUC, with truth features & " + " & ".join(f"\\nAEClo{c[0]}CICond{{}}" for c in cols) + " \\\\", "\\midrule",
+        "statistical resolution & " + " & ".join(f"\\nAEClo{c[0]}Res{{}}" for c in cols) + " \\\\",
         "\\bottomrule", "\\end{tabular}"]  # the two closure rows only (block and prong rows dropped from the paper)
 (P / "tables" / "holdout_summary.tex").write_text("\n".join(rows) + "\n"); print("written", P / "numbers.tex", P / "tables" / "holdout_summary.tex")
