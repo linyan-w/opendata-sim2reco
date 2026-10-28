@@ -25,7 +25,10 @@ for m in "AB":
 H = json.load(open(pathlib.Path(a.holdout) / "summary.json")); N = int(re.search(r"data: (\d+) events", open("reports/logs_all/m3_A.log").read()).group(1))  # the population (all events in the training volume)
 ci.append(f"\\newcommand{{\\nHfracTwoPpop}}{{{100 * H['coverage']['n_2p2h'] / N:.1f}\\%}}\n")
 blk = {k: float(v) for k, v in re.findall(r"\\newcommand\{\\nAECloAll((?:Mu|Vtx|Recoil)(?:Marg|Cond))\}\{([0-9.]+)\}", pathlib.Path("reports/all_events/closure_macros.tex").read_text())}
-ci.append(f"\\newcommand{{\\nAECloAllBlockMax}}{{{max(blk.values()):.3f}}}\n")  # largest block AUC on the test sample, with or without the truth features
+ci.append(f"\\newcommand{{\\nAECloAllBlockMax}}{{{max(blk.values()):.3f}}}\n")
+ci.append(f"\\newcommand{{\\nAECloAllMargBlockMax}}{{{max(v for k, v in blk.items() if k.endswith('Marg')):.3f}}}\n")
+CJ = json.load(open("reports/all_events/closure.json")); ns = [CJ[k][f"null_{t}_std"] for k in ("A_twop", "B_twop") for t in ("marg", "cond") if f"null_{t}_std" in CJ[k]]
+ci.append(f"\\newcommand{{\\nAECloTwoPNullStd}}{{{np.mean(ns):.3f}}}\n")  # label-swap null spread of the closure AUC on the 2p2h test events  # largest block AUC on the test sample, with or without the truth features
 parts.append("".join(ci)); (P / "numbers.tex").write_text("\n".join(parts))
 # Table IV: seven-variable closure by column from the macros, prong closure row from the holdout table
 ht = (pathlib.Path(a.holdout) / "tables" / "holdout_summary.tex").read_text(); prong = next(l for l in ht.splitlines() if l.startswith("prong closure AUC"))

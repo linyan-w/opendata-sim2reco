@@ -407,8 +407,12 @@ truth features added.}
 \caption{Closure AUC (0.5 is indistinguishable) with the evaluation's classifier recipe, on the nine generated
 variables and on the non-calorimetry subset that leaves out the non-vertex and isolated-blob energies, for the full
 test split and for the held-out 2p2h events, models A and B. ``+ truth'' adds the truth summary features, the
-flags and the multiplicity to the classifier. Values below 0.5 are fluctuations of an indistinguishable pair; the
-resolution of the test is about 0.005 on the full split and 0.01 on the 2p2h sample.}
+flags and the multiplicity to the classifier. The classifier halves are split by event, so that an event's open-dataset
+and surrogate copies, which share the truth features, fall in the same half; refits with the labels swapped in a random
+half of the pairs give a spread of 0.004 on the 2p2h sample, and the expected spread on the full split is about 0.001.
+A row-level split, used before 2026-10-28, let the classifier memorise an event's truth with one label and meet it with
+the other, which pushed the truth-conditional AUC below 0.5 on small samples (0.479 and 0.485 on 2p2h) and down by
+about 0.008 on the full split (0.503 against 0.511).}
 \label{tab:closure-ci}
 \end{table}
 
@@ -1066,9 +1070,10 @@ reconstruction flag has a lower log loss than for CC ($\nAELLrecoAllNC$ against 
 most NC events are not reconstructed), the multiplicity a higher one ($\nAELLmultAllNC$), and the closure AUCs are
 \nAEAUCmargAllNC{} and \nAEAUCcondAllNC{} on \nAETestRecoNC{} reconstructed test events; on the other CC subset
 (\nAETestRecoCCnumubar{} $\bar\nu_\mu$ and \nAETestRecoCCnue{} $\nu_e$ events) \nAEAUCmargAllOther{} and
-\nAEAUCcondAllOther{}. Values below 0.5 here are not better than indistinguishable: they are the fluctuation of a
-classifier trained on a small sample, of order 0.01 on tens of thousands of events and larger on the other CC
-subset, and say that no difference is resolved. Figure~\ref{fig:ae-nc-muon} shows the NC ``muon'': in model space the
+\nAEAUCcondAllOther{}. These evaluation AUCs were computed with a row-level classifier split, which lets the
+classifier memorise an event's truth features with one label and meet them with the other; the truth-conditional
+values below 0.5 on the small subsets are that bias, not fluctuations (Table~\ref{tab:closure-ci} has the event-split
+values; the evaluation code splits by event from 2026-10-28 on). Figure~\ref{fig:ae-nc-muon} shows the NC ``muon'': in model space the
 momentum ratio to the reference is two-peaked for the unmatched candidates, and the surrogate reproduces it,
 MINOS-matched and not.
 

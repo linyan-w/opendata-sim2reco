@@ -179,20 +179,23 @@ def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64
     Xr = np.concatenate([X, t0[reco][valid, 1:3], yn[reco][valid][:, None], x_real], 1)
     Xf = np.concatenate([X, S[reco][valid, 1:3], S[reco][valid, 3:4], x_fake], 1)
     Xc = np.concatenate([Xr, Xf]); yc = np.concatenate([np.ones(len(Xr)), np.zeros(len(Xf))])
-    rng = np.random.default_rng(seed); perm = rng.permutation(len(Xc)); half = len(perm) // 2
+    # split by event: an event's real and surrogate rows share the truth features and must fall in the same half,
+    # otherwise the classifier memorises the truth with one label and meets it with the other (AUC biased below 0.5)
+    rng = np.random.default_rng(seed); n_ev = len(Xr); ev = rng.permutation(n_ev); h_ev = n_ev // 2
+    tr, ts = np.r_[ev[:h_ev], ev[:h_ev] + n_ev], np.r_[ev[h_ev:], ev[h_ev:] + n_ev]
     clf = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.05, max_leaf_nodes=31, early_stopping=True, random_state=seed)
-    clf.fit(Xc[perm[:half]], yc[perm[:half]])
-    auc = roc_auc_score(yc[perm[half:]], clf.predict_proba(Xc[perm[half:]])[:, 1])
+    clf.fit(Xc[tr], yc[tr])
+    auc = roc_auc_score(yc[ts], clf.predict_proba(Xc[ts])[:, 1])
     clf2 = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.05, max_leaf_nodes=31, early_stopping=True, random_state=seed)
-    Xc2 = np.concatenate([x_real, x_fake]); clf2.fit(Xc2[perm[:half]], yc[perm[:half]])
-    auc2 = roc_auc_score(yc[perm[half:]], clf2.predict_proba(Xc2[perm[half:]])[:, 1])
+    Xc2 = np.concatenate([x_real, x_fake]); clf2.fit(Xc2[tr], yc[tr])
+    auc2 = roc_auc_score(yc[ts], clf2.predict_proba(Xc2[ts])[:, 1])
     M["classifier_auc_conditional"] = float(auc); M["classifier_auc_marginal"] = float(auc2)
     # which variables carry the discrimination: single columns and blocks (reco vector only, subsample)
-    sub = perm[:min(len(perm), 400_000)]; half2 = len(sub) // 2
+    evs = ev[:min(n_ev, 200_000)]; h2 = len(evs) // 2; str_, sts = np.r_[evs[:h2], evs[:h2] + n_ev], np.r_[evs[h2:], evs[h2:] + n_ev]
 
     def _auc(cols):
         c = HistGradientBoostingClassifier(max_iter=150, learning_rate=0.1, early_stopping=True, random_state=seed)
-        c.fit(Xc2[sub[:half2]][:, cols], yc[sub[:half2]]); return float(roc_auc_score(yc[sub[half2:]], c.predict_proba(Xc2[sub[half2:]][:, cols])[:, 1]))
+        c.fit(Xc2[str_][:, cols], yc[str_]); return float(roc_auc_score(yc[sts], c.predict_proba(Xc2[sts][:, cols])[:, 1]))
     M["classifier_auc_by_variable"] = {n: _auc([j]) for j, n in enumerate(names_model)}
     M["classifier_auc_by_block"] = {"muon": _auc([0, 1, 2]), "vertex": _auc([3, 4, 5]), "calorimetry": _auc([6, 7, 8])}
     # conditional versions: truth summary features + a subset of (flags, N, x). Separates head calibration
@@ -202,7 +205,7 @@ def evaluate(model, tf, d, idx_test, ld_test, out_dir, device="cuda", n_steps=64
     def _auc_cond(extra_cols):
         cols = list(range(nX)) + [nX + c for c in extra_cols]
         c = HistGradientBoostingClassifier(max_iter=150, learning_rate=0.1, early_stopping=True, random_state=seed)
-        c.fit(Xc[sub[:half2]][:, cols], yc[sub[:half2]]); return float(roc_auc_score(yc[sub[half2:]], c.predict_proba(Xc[sub[half2:]][:, cols])[:, 1]))
+        c.fit(Xc[str_][:, cols], yc[str_]); return float(roc_auc_score(yc[sts], c.predict_proba(Xc[sts][:, cols])[:, 1]))
     # layout of Xc columns after X: [minos, charge, N, x0..x8]
     M["classifier_auc_conditional_by_block"] = {
         "flags_and_N_only": _auc_cond([0, 1, 2]), "muon": _auc_cond([0, 1, 2, 3, 4, 5]), "vertex": _auc_cond([0, 1, 2, 6, 7, 8]),

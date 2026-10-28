@@ -151,10 +151,11 @@ def evaluate_tier2(model, tf, ptf, d, idx_test, ld_test, out_dir, device="cuda",
     Er = _event_prong_summary(Preal[:, 0], kin_r, Preal[:, 3], pf_r, Preal[:, 5], Preal[:, 6], Preal[:, 8] > 0.5, off_real_p)
     Ef = _event_prong_summary(Pfake[:, 0], kin_f, Pfake[:, 3], pf_f, Pfake[:, 5], Pfake[:, 6], Pfake[:, 8] > 0.5, off_fake_p)
     cls_p, mom_p, mask_p = m2._pad(d, ir); X, names = event_features(cls_p, mom_p, mask_p, d["ctx"][ir])
-    yc = np.r_[np.ones(len(Er)), np.zeros(len(Ef))]; perm = rng.permutation(len(yc)); half = len(perm) // 2
+    yc = np.r_[np.ones(len(Er)), np.zeros(len(Ef))]; n_ev = len(Er); ev = rng.permutation(n_ev); h_ev = n_ev // 2
+    tr, ts = np.r_[ev[:h_ev], ev[:h_ev] + n_ev], np.r_[ev[h_ev:], ev[h_ev:] + n_ev]  # by event: both copies of an event in the same half
     def _auc(A):
-        c = HistGradientBoostingClassifier(max_iter=200, learning_rate=0.1, early_stopping=True, random_state=seed).fit(A[perm[:half]], yc[perm[:half]])
-        return float(roc_auc_score(yc[perm[half:]], c.predict_proba(A[perm[half:]])[:, 1]))
+        c = HistGradientBoostingClassifier(max_iter=200, learning_rate=0.1, early_stopping=True, random_state=seed).fit(A[tr], yc[tr])
+        return float(roc_auc_score(yc[ts], c.predict_proba(A[ts])[:, 1]))
     M["closure_prongs"] = {"event_summary_only": _auc(np.r_[Er, Ef]), "truth_plus_event_summary": _auc(np.r_[np.c_[X, Er], np.c_[X, Ef]]),
                            "truth_plus_vertex_z": _auc(np.r_[np.c_[X, z_real - d["ctx"][ir, 2]], np.c_[X, z_fake - d["ctx"][ir, 2]]])}
     # conditional: leading proton-hypothesis P vs true leading proton KE
