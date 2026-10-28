@@ -40,7 +40,7 @@ for tag, key in (("ATwoP", "A_twop"), ("BTwoP", "B_twop"), ("BCtl", "B_ctl"), ("
 parts.append("".join(ci)); (P / "numbers.tex").write_text("\n".join(parts))
 # Table IV: seven-variable closure by column from the macros, prong closure row from the holdout table
 ht = (pathlib.Path(a.holdout) / "tables" / "holdout_summary.tex").read_text(); prong = next(l for l in ht.splitlines() if l.startswith("prong closure AUC"))
-cols = [("ATwoP", "full model", "2p2h"), ("BTwoP", "2p2h holdout", "2p2h"), ("BCtl", "2p2h holdout", "control")]
+cols = [("ATwoP", "full model", "2p2h"), ("BTwoP", "2p2h holdout", "2p2h")]
 rows = ["\\begin{tabular}{l" + "c" * len(cols) + "}", "\\toprule",
         "closure AUC & " + " & ".join(c[1] for c in cols) + " \\\\", " & " + " & ".join(c[2] for c in cols) + " \\\\", "\\midrule",
         "reconstructed only & " + " & ".join(f"\\nAEClo{c[0]}CIMarg{{}}" for c in cols) + " \\\\",
