@@ -26,7 +26,10 @@ if a.only_inttype: te = te[np.isin(d["intType"][te], a.only_inttype)]
 if a.subset: te = te[subset_mask(d, a.subset)[te]]
 idx = np.random.default_rng(0).permutation(te)[:a.n]
 cls, mom, mask = _pad(d, idx); X, names = event_features(cls, mom, mask, d["ctx"][idx])
-keh, kep = X[:, names.index("sumKE_had")], X[:, names.index("maxKE_p")]; kpi = np.maximum(X[:, names.index("maxKE_pip")], X[:, names.index("maxKE_pim")]); nch = d["n_charged_true"][idx].astype(int); Pt = np.linalg.norm(d["mu_true"][idx], axis=1) / 1e3
+kep = X[:, names.index("maxKE_p")]; kpi = np.maximum(X[:, names.index("maxKE_pip")], X[:, names.index("maxKE_pim")]); nch = d["n_charged_true"][idx].astype(int); Pt = np.linalg.norm(d["mu_true"][idx], axis=1) / 1e3
+from sim2reco.prep.features import class_mass
+_P = np.linalg.norm(mom, axis=-1); _m = class_mass(cls); _had = mask & ~np.isin(cls, [1, 2, 13])  # hadrons: every final-state particle but the charged leptons (mu-, e, mu+); event_features' sumKE_had excludes only the mu-
+keh = (np.where(_had, np.sqrt(_P ** 2 + _m ** 2) - _m, 0.0)).sum(1)
 Pt = np.where((d["current"][idx] == 1) & (np.abs(d["incoming"][idx]) == 14), Pt, np.nan)  # muon response only for events with a true muon (CC nu_mu and nu_mu-bar); NC and nu_e have no muon
 def summarise(reco, y, prongs, offs):
     """per-event quantities for reconstructed events: muon ratio, recoil [GeV], leading proton-fit and pion-hypothesis P [MeV] (nan if none), n prongs, n with kinematics"""
