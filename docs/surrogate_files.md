@@ -1,7 +1,10 @@
 # The surrogate output files and their uncertainties
 
-The surrogate writes a pruned `MasterAnaDev` tree with the open dataset's branch names (one row per reconstructed event,
-truth columns copied from the generator sample), plus `surrogate_*` branches. This note describes the **ensemble files**
+The surrogate writes two trees, like the open dataset: `Truth`, one row per generated event with the truth branches of the
+input sample (the efficiency denominator), and a pruned `MasterAnaDev` tree with the open dataset's branch names, one row
+per reconstructed event, truth columns copied, plus `surrogate_*` branches. Events are cross-linked by
+`(mc_run, mc_subrun, mc_nthEvtInFile)` or `eventID`. Files written before 2026-10-29 have the `MasterAnaDev` tree only.
+This note describes the **ensemble files**
 `surrogate_Eall_<sample>.root` (GENIE and GiBUU inclusive samples; `scripts/surrogate_to_ntuple.py --ensemble`), which
 carry the model uncertainty in a form an analysis can propagate. The single-model files `surrogate_Aall_*.root` have the
 same reconstruction branches without the universes.
@@ -28,7 +31,8 @@ drawn with the **same random numbers** as the nominal, so the nominal is exactly
 | `surrogate_univ_vtx_x/y/z` | reconstructed vertex [mm] (z snapped to a plane when the member's class head says so) |
 | `surrogate_univ_recoil_E`, `_recoil_nonvtx100`, `_nonvtx_iso_blobs_E` | calorimetric energies [MeV] |
 | `surrogate_univ_n_prongs` | prong count (muon track + hadron prongs) |
-| `surrogate_univ_weight` | the weight that turns the nominal row set into member `k`'s reconstruction (see below) |
+| `surrogate_univ_weight_reco`, `_minos`, `_charge` | the weight of member `k` for each flag separately: reconstruction, MINOS match, charge sign (see below) |
+| `surrogate_univ_weight` | their product: the weight that turns the nominal row set into member `k`'s reconstruction |
 
 **Weights.** The file contains only the events the nominal sample reconstructed, with the nominal's MINOS-match and
 charge outcomes. Member `k` would reconstruct and match a slightly different set. Instead of separate row sets, each
@@ -36,8 +40,10 @@ universe reweights the nominal rows by the ratio of Bernoulli probabilities,
 
 `w_k = p_k(reco) / p_nom(reco) × [p_k(MINOS) / p_nom(MINOS) if the nominal has a MINOS match, else (1−p_k)/(1−p_nom)] × [likewise for the charge sign, if matched]`,
 
-which reproduces member `k`'s reconstruction, matching and charge probabilities in expectation. The weights average to
-1.000 ± 0.001 per universe and lie within 0.7–1.3 for 98% of events.
+which reproduces member `k`'s reconstruction, matching and charge probabilities in expectation. The three factors are
+written separately (`surrogate_univ_weight_reco`, `_minos`, `_charge`) so that the uncertainty of each flag can be
+propagated on its own, and their product as `surrogate_univ_weight`. The weights average to 1.000 ± 0.001 per universe
+and lie within 0.7–1.3 for 98% of events.
 
 **Recipe.** For a histogram `H` of any event-level quantity after any selection:
 
@@ -80,6 +86,16 @@ variances of the flag logits, the multiplicity log-probabilities and the model-s
 flags of unfamiliar events (migrated events: AUC 0.77 for the flow flag), not uncertainties to propagate. The earlier
 Bayesian-last-layer (posterior-draw) columns of the same names in `surrogate_Aall_*` files are superseded: their
 binned uncertainty is zero by construction.
+
+## The `Truth` tree
+
+Every input event, with all branches of the input truth file, and: `surrogate_in_population` (true vertex z inside the
+training volume, 4000–8700 mm; events outside are never reconstructed by the surrogate and have probability 0),
+`surrogate_p_reco_exists` (the nominal member's reconstruction probability), `surrogate_reco_exists` (the sampled flag:
+true for exactly the events in `MasterAnaDev`), and with the ensemble `surrogate_member` (−1 outside the population) and
+`surrogate_univ_p_reco_exists[4]`, each member's reconstruction probability. An efficiency in universe `k` is the
+`MasterAnaDev` numerator filled with `surrogate_univ_weight_reco[k]` (times the other flag weights the selection uses)
+over the `Truth` denominator; the denominator does not change between universes.
 
 ## Other branches
 
