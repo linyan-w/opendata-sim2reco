@@ -48,7 +48,7 @@ def test_surrogate_forward_and_sample():
         k = 1 + i
         items.append((np.random.randint(1, 12, k).astype(np.int8), np.random.randn(k, 3).astype(np.float32) * 500,
                       np.array([0, 0, 6000, 6, 12], np.float32), np.array([1, 1, 1], np.float32), np.int8(i % 3),
-                      np.random.randn(9).astype(np.float32), np.array([0, 0, 4000], np.float32), np.float32(1.0)))
+                      np.random.randn(9).astype(np.float32), np.array([0, 0, 4000], np.float32), np.float32(1.0), np.zeros(2, np.float32)))
     b = collate(items)
     m = Surrogate(d_model=32, n_heads=4, n_layers=1, flow_hidden=64, flow_layers=2)
     L = m.losses(b)

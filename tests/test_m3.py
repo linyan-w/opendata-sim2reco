@@ -56,7 +56,7 @@ def test_surrogate_tier2_forward_and_sample():
         k = 1 + i; npr = i % 3
         items.append((np.random.randint(1, 12, k).astype(np.int8), (np.random.randn(k, 3) * 500).astype(np.float32),
                       np.array([0, 0, 6000, 6, 12], np.float32), np.array([1, 1, 1], np.float32), np.int8(npr),
-                      np.random.randn(9).astype(np.float32), np.array([0, 0, 4000], np.float32), np.float32(1.0),
+                      np.random.randn(9).astype(np.float32), np.array([0, 0, 4000], np.float32), np.float32(1.0), np.zeros(2, np.float32),
                       np.random.randn(npr, 10).astype(np.float32), np.int64(i % 9), np.float32(0.3)))
     b = collate(items)
     assert b["prongs"].shape[1] == 2 and b["pmask"].sum() == sum(i % 3 for i in range(B))
