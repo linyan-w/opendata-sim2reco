@@ -5,7 +5,7 @@ input sample (the efficiency denominator), and a pruned `MasterAnaDev` tree with
 per reconstructed event, truth columns copied, plus `surrogate_*` branches. Events are cross-linked by
 `(mc_run, mc_subrun, mc_nthEvtInFile)` or `eventID`. Files written before 2026-10-29 have the `MasterAnaDev` tree only.
 This note describes the **ensemble files**
-`surrogate_Eall_<sample>.root` (GENIE and GiBUU inclusive samples; `scripts/surrogate_to_ntuple.py --ensemble`), which
+`surrogate_Eall_<sample>.root` (the GENIE sample and the NuWro and GiBUU samples; `scripts/surrogate_to_ntuple.py --ensemble`), which
 carry the model uncertainty in a form an analysis can propagate. The single-model files `surrogate_Aall_*.root` have the
 same reconstruction branches without the universes.
 
@@ -126,5 +126,5 @@ universe k of a selection is `sum(gen_weight x surrogate_univ_weight[k])` over t
 `surrogate_p_reco_exists`: the nominal member's probability that the event is reconstructed (the written events are the
 Bernoulli draws of it). `phys_n_dead_discr_pair_upstream_prim_track_proj`: the dead-time cut variable, drawn from the open
 dataset's distribution by reconstructed vertex z, independently of the event (it is overlay pile-up, not physics); the
-standard cut `<= 1` passes 99.0%. Generator extras (`nuwro_*`, `gibuu_*`, `gen_relweight`, `ref_*`) pass through from the
-truth sample; `nuwro_wcomp` is the sample weight of the inclusive construction (1 for almost all events).
+standard cut `<= 1` passes 99.0%. Generator extras (`gen_*`, `nuwro_*`, `gibuu_*`, `ref_*`) pass through from the
+truth sample into both trees.

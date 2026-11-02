@@ -21,10 +21,10 @@ PACKAGE = {  # sim2reco/... -> xsum/...
 }
 SCRIPTS = {  # scripts/... -> ...
     "slim_remote.py": "scripts/curate/slim_remote.py", "slim.py": "scripts/curate/slim.py", "dataset_summary.py": "scripts/curate/dataset_summary.py",
-    "genie_tracker_truth.py": "scripts/curate/genie_truth.py", "nuwro_to_truth.py": "scripts/curate/nuwro_to_truth.py", "gibuu_to_truth.py": "scripts/curate/gibuu_to_truth.py",
+    "genie_tracker_truth.py": "scripts/curate/genie_truth.py", "thin_geo_truth.py": "scripts/curate/thin_truth.py",
     "deadtime_fetch.py": "scripts/curate/deadtime_fetch.py", "deadtime_study.py": "scripts/curate/deadtime_table.py",
     "run_m2.py": "scripts/train/train_event.py", "run_m3.py": "scripts/train/train_prong.py",
-    "surrogate_to_ntuple.py": "scripts/infer/surrogate_to_ntuple.py", "conform_ntuple.py": "scripts/infer/conform_ntuple.py", "add_deadtime.py": "scripts/infer/add_deadtime.py",
+    "surrogate_to_ntuple.py": "scripts/infer/surrogate_to_ntuple.py", "merge_ntuples.py": "scripts/infer/merge_ntuples.py", "conform_ntuple.py": "scripts/infer/conform_ntuple.py", "add_deadtime.py": "scripts/infer/add_deadtime.py",
     "closure_subset_all.py": "scripts/evaluate/closure_classifier.py", "ensemble_spread.py": "scripts/evaluate/ensemble_spread.py", "holdout_compare.py": "scripts/evaluate/holdout_compare.py",
     "render_schematic.sh": "scripts/evaluate/render_schematic.sh", "setup_env.sh": "scripts/setup_env.sh",
     "paper_fig_response.py": "paper/fig_response.py", "paper_fig_confusion.py": "paper/fig_confusion.py", "paper_fig_ensemble.py": "paper/fig_ensemble.py",
@@ -42,7 +42,8 @@ TESTS = ["conftest.py", "test_dataset.py", "test_m2.py", "test_m3.py", "test_muo
 
 # ---------------------------------------------------------------- text rewrites applied to every copied text file
 OLD_SCRIPT_PATHS = {f"scripts/{k}": v for k, v in SCRIPTS.items()}
-OLD_SCRIPT_PATHS.update({"scripts/pipeline_ensemble.sh": "scripts/train/train_all.sh", "scripts/deadtime_study.py": "scripts/curate/deadtime_table.py"})
+OLD_SCRIPT_PATHS.update({"scripts/pipeline_ensemble.sh": "scripts/train/train_all.sh", "scripts/deadtime_study.py": "scripts/curate/deadtime_table.py",
+                         "scripts/build_geo_truth.py": "scripts/curate/merge_truth_shards.py", "scripts/pipeline_geo_2026-11.sh": "scripts/infer/infer_sliced.sh"})
 REWRITES = [
     ("from sim2reco.train import m2, m3", "from xsum.train import event_stage as m2, prong_stage as m3"),
     ("from sim2reco.train.m2 import", "from xsum.train.event_stage import"), ("from sim2reco.train.m3 import", "from xsum.train.prong_stage import"),
@@ -52,6 +53,9 @@ REWRITES = [
     ("reports/ensemble_full/", "paper/inputs/ensemble/"), ("reports/ensemble/", "paper/inputs/ensemble/"), ("reports/all_events/", "paper/inputs/closure/"),
     ("reports/holdout_2p2h_1A_all", "paper/inputs/holdout"), ("reports/coverage_2p2h/macros.tex", "paper/inputs/coverage_macros.tex"), ("reports/paper_figs", "paper/figures"),
     ("data/deadtime/deadtime_marginal.json", "data/deadtime_marginal.json"),
+    ("(`data/geo_2026-11/HANDOFF.md`; 8 campaigns per generator,", "(the generator side's hand-off note; 8 campaigns per generator,"),
+    (" They replace the `*_inclusive` NuWro and GiBUU files, whose\nper-nucleus CC rates were tied to the GENIE sample.", ""),
+    ("(checked against their manifests), `scripts/curate/thin_truth.py`", "(docs/generator_input.md), `scripts/curate/thin_truth.py`"),
     ('ap.add_argument("--m1", default="reports/m1_1A/metrics.json"); ', ""), ('ap.add_argument("--m1", default="reports/m1_1A/metrics.json")', ""),
     ('[--m1 reports/m1_1A/metrics.json] ', ""), ('m1 = json.load(open(a.m1)) if pathlib.Path(a.m1).exists() else None', "m1 = None"),
     ('ap.add_argument("--init", default="reports/m2_1A/model.pt")', 'ap.add_argument("--init", required=True, help="stage-one checkpoint (scripts/train/train_event.py)")'),
