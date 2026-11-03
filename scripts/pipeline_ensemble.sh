@@ -16,6 +16,6 @@ for s in $(seq 1 $N); do
   [ -f $M3/metrics_tier2.json ] || { fits 6600 "M3 s$s"; run "M3 s$s" $PY -u scripts/run_m3.py $M3 --init $M2/model.pt --epochs 16 --lr 2e-4 --steps 64 --seed $s --m1 none $EX > $L/m3_s$s.log 2>&1; }
   [ -f ${M3}_vz_far/model.pt ] || { fits 2400 "head s$s"; run "head s$s" env VZ_MODE=_far VZ_MODELS="m3_1A_all${SUF}_s$s" scripts/pipeline_vz.sh; }
   [ -f $M3/history_vz.json ] || { cp $M3/model.pt ${M3}_prevz.pt; cp ${M3}_vz_far/model.pt $M3/model.pt; cp ${M3}_vz_far/history.json $M3/history_vz.json; echo "$(stamp) adopted the z-conditioned head in $M3" >> $L/pipeline.log; }
-  [ "${ENS_HOLDOUT:-0}" = 1 ] || [ -f $M3/bayes_last.pt ] || { fits 1200 "bayes s$s"; run "bayes s$s" $PY scripts/fit_bayes_last.py $M3 > $L/bayes_s$s.log 2>&1; }
+  [ "${ENS_HOLDOUT:-0}" = 1 ] || [ -f $M3/bayes_last.pt ] || { fits 1200 "bayes s$s"; run "bayes s$s" $PY scripts/bayes/fit_bayes_last.py $M3 > $L/bayes_s$s.log 2>&1; }
 done
 echo "$(stamp) PIPELINE ENSEMBLE DONE ($N members$SUF)" >> $L/pipeline.log

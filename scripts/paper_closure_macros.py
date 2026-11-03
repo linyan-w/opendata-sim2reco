@@ -9,7 +9,7 @@ for sub, key in (("CC", "A_ccnumu"), ("All", "A_full"), ("ATwoP", "A_twop"), ("B
     for var, k in (("CI", "ccinc"), ("Mu", "mu"), ("Vtx", "vtx"), ("Recoil", "recoil")):
         for kind in ("marg", "cond"): out.append(f"\\newcommand{{\\nAEClo{sub}{var}{kind.capitalize()}}}{{{r[f'{k}_{kind}']:.3f}}}")
     out.append(f"\\newcommand{{\\nAEClo{sub}N}}{{{r['n']:,}}}".replace(",", "{,}"))
-# the technote's closure-subset table and \nCL* macros (as scripts/closure_subset.py wrote them for the CC model) for the CC nu_mu subset evaluation directory
+# the technote's closure-subset table and \nCL* macros (as scripts/retired/closure_subset.py wrote them for the CC model) for the CC nu_mu subset evaluation directory
 cc = pathlib.Path("reports/m3_1A_all_ccnumu"); (cc / "tables").mkdir(parents=True, exist_ok=True); f3 = lambda x: f"{x:.3f}"
 rows = [("model A, CC $\\nu_\\mu$ test events", "A_ccnumu"), ("model A, full test split (all events)", "A_full"), ("model B (2p2h blind), CC $\\nu_\\mu$ non-2p2h control", "B_ctl"), ("model A, held-out 2p2h events", "A_twop"), ("model B, held-out 2p2h events", "B_twop")]
 (cc / "tables" / "closure_ccinc.tex").write_text("\\begin{tabular}{lcccc}\n\\toprule\n & \\multicolumn{2}{c}{all nine variables} & \\multicolumn{2}{c}{non-calorimetry set (muon, vertex, recoil)} \\\\\n & marginal & + truth & marginal & + truth \\\\\n\\midrule\n"

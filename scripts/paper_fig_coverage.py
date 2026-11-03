@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Paper figure: is the held-out mode reachable by reweighting?  For each interaction mode, the cumulative fraction
 of its events against the density ratio (all other modes) / (mode) in the surrogate's input space, from the
-classifier odds of scripts/coverage_by_process.py.  The inverse of the ratio is the weight a reweighting of the
+classifier odds of scripts/retired/coverage_by_process.py.  The inverse of the ratio is the weight a reweighting of the
 mode-free sample would need at that event.
 Usage: scripts/paper_fig_coverage.py reports/coverage_2p2h/by_process_ratios.npz OUT.png"""
 import pathlib, sys

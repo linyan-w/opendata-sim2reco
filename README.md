@@ -20,20 +20,19 @@ bash scripts/setup_env.sh                                  # Python >= 3.9 venv 
 source .venv/bin/activate
 python scripts/slim_remote.py configs/MediumEnergy_FHC_StandardMC_Playlist1A.txt data/slim_1A --budget-gb 9.5
                                                            # stream from xrootd, 20 GB ROOT -> 300 MB Parquet per file
-python scripts/slim.py data/slim some_local_file.root      # same for a local ROOT file
-python scripts/dataset_summary.py data/slim/MasterAnaDev_mc_AnaTuple_run00113069_Playlist
-python scripts/run_m1.py data/slim/MasterAnaDev_mc_AnaTuple_run00113069_Playlist reports/m1   # baselines, ~1 min on a GPU
-python scripts/run_m2.py reports/m2_1A --epochs 30                                         # surrogate, ~2 h on an RTX 3090, all files in data/slim
-python scripts/run_m3.py reports/m3_1A --epochs 16 --init reports/m2_1A/model.pt                 # prong model, warm start from M2
-python scripts/surrogate_to_ntuple.py reports/m3_1A data/slim/<stem>.truth.parquet out.root  # truth -> pruned MasterAnaDev ntuple (80 branches)
-python scripts/conform_ntuple.py out.root MasterAnaDev_data_AnaTuple_run00010255_Playlist.root out_full.root --strict
+python scripts/dataset_summary.py data/slim_1A/<stem>      # population statistics of one slimmed file
+bash scripts/pipeline_all.sh                               # the deployed chain: event stage (run_m2.py) -> prong stage (run_m3.py)
+                                                           #   -> vertex head (pipeline_vz.sh) for the full model and the 2p2h holdout
+bash scripts/pipeline_ensemble.sh                          # the three further ensemble members (seeds 1-3)
+python scripts/surrogate_to_ntuple.py reports/m3_1A_all TRUTH.parquet out.root --ensemble reports/m3_1A_all_s1 reports/m3_1A_all_s2 reports/m3_1A_all_s3
+                                                           # truth -> two-tree surrogate ntuple with the four universes (docs/surrogate_files.md)
+python scripts/conform_ntuple.py out.root data/reference/MasterAnaDev_data_AnaTuple_run00010255_Playlist.root out_full.root --strict
                                                            # optional: full 3,687-branch schema + Meta tree, unmodelled branches at their sentinel defaults
-bash scripts/pipeline_1A.sh                                 # unattended: slim-wait, caches, M1, model A, 2p2h-blind model B, evaluations
-python scripts/holdout_compare.py reports/holdout_2p2h_1A --a reports/m3_1A_on2p2h --b reports/m3_1A_no2p2h_on2p2h --b-control reports/m3_1A_no2p2h_control --a-full reports/m3_1A
-python scripts/fit_bayes_last.py reports/m3_1A                  # Bayesian last layers on the frozen model (~1 min)
-python scripts/bayes_uncertainty_eval.py reports/bayes_1A --model reports/m3_1A_no2p2h --tag _B   # epistemic flag + calibration
-pytest -q                                                  # round-trip tests (ROOT file or its slimmed Parquet)
-(cd reports/performance && tectonic -X compile main.tex)   # performance report PDF
+bash scripts/pipeline_geo_2026-11.sh                       # the geometry-placed NuWro and GiBUU samples in slices (build_geo_truth.py, thin_geo_truth.py, merge_ntuples.py)
+bash scripts/pipeline_paper_all.sh; bash scripts/pipeline_paper_fulltest.sh; bash scripts/pipeline_technote_all.sh   # paper and technote products
+python scripts/export_open.py                              # the open release (XSuM-MINERvA)
+pytest -q                                                  # round-trip and model tests on the example file
+(cd reports/performance && tectonic -X compile main.tex)   # performance report (technote) PDF
 ```
 
 ## Layout
@@ -43,6 +42,7 @@ pytest -q                                                  # round-trip tests (R
 - `sim2reco/data/` — torch dataset (padded particle sets, context, Tier 0/1 targets) and subrun-level splits.
 - `sim2reco/models/` — set encoder, flow matching, surrogate (M2), MDN baseline (M1); `sim2reco/train/` — `baselines.py` (M1), `m2.py` (training + closure evaluation); `sim2reco/eval/` — metrics and plots.
 - `sim2reco/data/compact.py` — ragged multi-file dataset and the Tier 1 transform (model space <-> tuple units).
+- `scripts/` — curation, the training chain, inference, evaluation, paper and technote products, the open-release export; `scripts/bayes/` the Bayesian-last-layer study (kept as the technote's negative result); `scripts/retired/` finished studies and the pre-geometry generator placement, with a README (inputs no longer on disk).
 - `reports/m1/` — M1 metrics, LaTeX tables, figures; `reports/performance/main.tex` — the performance report.
 - `configs/data.yaml` — selection and split settings.
 - `tests/` — pipeline and exact round-trip tests on the example ntuple.
