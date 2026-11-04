@@ -2,9 +2,9 @@
 """Technote tables and macros of the full-dataset, full-volume section: the inclusive NuWro and GiBUU samples
 (scripts/retired/nuwro_inclusive.py) against the open dataset, and their reco-fiducial comparison (scripts/retired/fullvolume_compare.py).
 Writes reports/inclusive/{macros_inc.tex, tables/composition.tex, tables/origin_both.tex, tables/epistemic_both.tex}.
-Usage: scripts/retired/technote_inclusive.py [--nuwro data/inclusive/nuwro_inclusive.json --gibuu data/inclusive_gibuu/gibuu_inclusive.json]"""
+Usage: scripts/retired/technote_inclusive.py [--nuwro data/inclusive/genie_inclusive.json --gibuu data/inclusive_gibuu/gibuu_inclusive.json]"""
 import argparse, json, pathlib
-ap = argparse.ArgumentParser(); ap.add_argument("--nuwro", default="data/inclusive/nuwro_inclusive.json"); ap.add_argument("--gibuu", default="data/inclusive_gibuu/gibuu_inclusive.json")
+ap = argparse.ArgumentParser(); ap.add_argument("--nuwro", default="data/inclusive/genie_inclusive.json"); ap.add_argument("--gibuu", default="data/inclusive_gibuu/gibuu_inclusive.json")
 ap.add_argument("--nuwro-report", default="reports/inclusive"); ap.add_argument("--gibuu-report", default="reports/inclusive_gibuu"); ap.add_argument("--out", default="reports/inclusive"); a = ap.parse_args()
 out = pathlib.Path(a.out); (out / "tables").mkdir(parents=True, exist_ok=True)
 N, G = json.load(open(a.nuwro)), json.load(open(a.gibuu)); SN, SG = json.load(open(f"{a.nuwro_report}/summary.json")), json.load(open(f"{a.gibuu_report}/summary.json"))
